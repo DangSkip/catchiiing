@@ -3,6 +3,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const { exec } = require('child_process');
 
 const app = express();
 app.use(express.json());
@@ -13,6 +14,27 @@ const SHUTDOWN_GRACE_MS = 60_000;
 let sseRes = null;
 let shutdownTimer = null;
 let pendingResolve = null;
+let sseWaiters = [];
+let serverPort = null;
+
+function openBrowser() {
+  const url = `http://localhost:${serverPort}`;
+  exec(`open -na "Google Chrome" --args --app=${url} --window-size=760,560`, (err) => {
+    if (err) exec(`open "${url}"`);
+  });
+}
+
+function waitForSSE(timeoutMs = 15000) {
+  if (sseRes) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const waiter = () => { clearTimeout(timer); resolve(); };
+    const timer = setTimeout(() => {
+      sseWaiters = sseWaiters.filter(fn => fn !== waiter);
+      reject(new Error('No browser connected within 15s'));
+    }, timeoutMs);
+    sseWaiters.push(waiter);
+  });
+}
 
 // --- SSE stream the browser listens to ---
 app.get('/events', (req, res) => {
@@ -27,6 +49,10 @@ app.get('/events', (req, res) => {
   res.flushHeaders();
 
   sseRes = res;
+
+  const waiters = sseWaiters.slice();
+  sseWaiters = [];
+  waiters.forEach(fn => fn());
 
   req.on('close', () => {
     sseRes = null;
@@ -43,7 +69,12 @@ app.post('/ui', async (req, res) => {
   const payload = req.body;
 
   if (!sseRes) {
-    return res.status(503).json({ error: 'No browser connected. Open the UI URL first.' });
+    openBrowser();
+    try {
+      await waitForSSE();
+    } catch (e) {
+      return res.status(503).json({ error: e.message });
+    }
   }
 
   if (payload.type === 'display') {
@@ -85,8 +116,8 @@ app.get('/', (req, res) => {
 
 // --- Start ---
 const server = app.listen(0, '127.0.0.1', () => {
-  const port = server.address().port;
-  fs.writeFileSync(PORT_FILE, String(port));
-  console.log(`\nUI Bridge running → http://localhost:${port}`);
+  serverPort = server.address().port;
+  fs.writeFileSync(PORT_FILE, String(serverPort));
+  console.log(`\nUI Bridge running → http://localhost:${serverPort}`);
   console.log('Open this in your browser to continue.\n');
 });

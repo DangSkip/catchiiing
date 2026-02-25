@@ -288,7 +288,7 @@ async function respond(data) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-  root.innerHTML = '<p class="idle"><span class="dot live"></span>Waiting for next event…</p>';
+  window.close();
 }
 
 function esc(str) {
