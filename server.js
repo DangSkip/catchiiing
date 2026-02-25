@@ -34,8 +34,9 @@ function restoreFocus() {
 
 const WIN_W = 780, WIN_H = 580;
 
-function centerWindow() {
-  // Center over the previousApp window — guaranteed to be on the right screen
+function centerWindow(callback) {
+  // Center over the previousApp window — guaranteed to be on the right screen.
+  // Calls callback when done so the browser can be revealed.
   const W = WIN_W, H = WIN_H;
   const script = previousApp ? `
 try
@@ -58,7 +59,7 @@ set cx to (item 3 of sb - ${W}) div 2
 set cy to (item 4 of sb - ${H}) div 2
 tell application "Google Chrome" to set bounds of front window to {cx, cy, cx + ${W}, cy + ${H}}
 `;
-  const child = exec('osascript');
+  const child = exec('osascript', () => { if (callback) callback(); });
   child.stdin.write(script);
   child.stdin.end();
 }
@@ -96,7 +97,9 @@ app.get('/events', (req, res) => {
   res.flushHeaders();
 
   sseRes = res;
-  centerWindow();
+  centerWindow(() => {
+    if (sseRes) sseRes.write(`data: ${JSON.stringify({ type: '_ready' })}\n\n`);
+  });
 
   const waiters = sseWaiters.slice();
   sseWaiters = [];
@@ -167,6 +170,5 @@ app.get('/', (req, res) => {
 const server = app.listen(0, '127.0.0.1', () => {
   serverPort = server.address().port;
   fs.writeFileSync(PORT_FILE, String(serverPort));
-  console.log(`\nUI Bridge running → http://localhost:${serverPort}`);
-  console.log('Open this in your browser to continue.\n');
+  console.log(`\nUI Bridge running → http://localhost:${serverPort}\n`);
 });
