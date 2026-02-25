@@ -1,6 +1,6 @@
 {
   "name": "promptui",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Browser-based UI prompts for Claude Code — image pickers, confirmations, reviews, checklists",
   "bin": {
     "promptui": "./server.js"
@@ -10,14 +10,19 @@
     "server.js",
     "index.html",
     "CLAUDE.md",
+    "postinstall.js",
     ".claude/commands/promptui.md"
   ],
+  "scripts": {
+    "postinstall": "node postinstall.js"
+  },
   "dependencies": {
     "express": "^4.18.2"
   },
   "engines": {
     "node": ">=18"
   },
+  "os": ["darwin"],
   "keywords": ["claude", "claude-code", "ui", "prompt", "sse", "interactive", "cli"],
   "license": "MIT",
   "repository": {

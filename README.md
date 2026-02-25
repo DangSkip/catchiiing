@@ -56,12 +56,18 @@ curl -s -X POST localhost:$PORT/ui --json '{
 
 ## /promptui skill
 
-This repo ships a Claude Code skill at `.claude/commands/promptui.md`.
+The `/promptui` Claude Code skill is installed automatically on `npm install`.
 
-**Install globally:**
+**Global install** — skill goes to `~/.claude/commands/promptui.md` (available in every project):
 
 ```bash
-cp .claude/commands/promptui.md ~/.claude/commands/promptui.md
+npm install -g promptui
+```
+
+**Local install** — skill goes to `<your-project>/.claude/commands/promptui.md`:
+
+```bash
+npm install promptui
 ```
 
 Then type `/promptui` in any Claude Code session to trigger a UI prompt. Claude will gather options from context, open the window, and act on your response.
