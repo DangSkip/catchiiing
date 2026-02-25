@@ -12,7 +12,7 @@ The server opens a Chrome app window automatically when needed, waits for your i
 
 ## How it works
 
-> Claude Code knows how to use this instantly — no setup required beyond starting the server.
+> Claude Code knows how to use this instantly — just install and go.
 
 ```bash
 PORT=$(cat /tmp/promptui.port)
