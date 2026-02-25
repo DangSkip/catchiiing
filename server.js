@@ -20,6 +20,8 @@ let sseWaiters = [];
 let serverPort = null;
 let frontApp = null;
 let openBrowserDone = null; // resolves when window is positioned
+let storedOptions = [];    // full option list for paginated/filtered payloads
+const PAGE_SIZE = 48;
 
 function captureFrontApp() {
   return new Promise((resolve) => {
@@ -131,7 +133,7 @@ app.get('/events', (req, res) => {
 
 // --- Send a UI event, block until user responds ---
 app.post('/ui', async (req, res) => {
-  const payload = req.body;
+  let payload = req.body;
 
   if (!sseRes) {
     openBrowser();
@@ -147,6 +149,17 @@ app.post('/ui', async (req, res) => {
     return res.json({ ok: true });
   }
 
+  // For filterable payloads: store full list server-side, send first page only
+  if (payload.filter && Array.isArray(payload.options)) {
+    storedOptions = payload.options;
+    payload = {
+      ...payload,
+      options: storedOptions.slice(0, PAGE_SIZE),
+      total: storedOptions.length,
+      pageSize: PAGE_SIZE,
+    };
+  }
+
   const result = await new Promise((resolve) => {
     pendingResolve = resolve;
     sseRes.write(`data: ${JSON.stringify(payload)}\n\n`);
@@ -154,6 +167,17 @@ app.post('/ui', async (req, res) => {
 
   pendingResolve = null;
   res.json(result);
+});
+
+// --- Paginated / filtered options ---
+app.get('/ui/page', (req, res) => {
+  const q = (req.query.q || '').toLowerCase().trim();
+  const offset = parseInt(req.query.offset) || 0;
+  const limit = parseInt(req.query.limit) || PAGE_SIZE;
+  const filtered = q
+    ? storedOptions.filter(o => o.label.toLowerCase().includes(q))
+    : storedOptions;
+  res.json({ items: filtered.slice(offset, offset + limit), total: filtered.length });
 });
 
 // --- Browser posts response back here ---

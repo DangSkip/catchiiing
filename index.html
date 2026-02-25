@@ -207,10 +207,74 @@
     bottom: 0;
     display: flex;
     justify-content: flex-end;
+    align-items: center;
+    gap: 12px;
     padding: 14px 32px 20px;
     margin: 8px -32px -28px;
     background: #1a1a1a;
     border-top: 1px solid #2a2a2a;
+  }
+
+  .submit-row .tally {
+    color: #666;
+    font-size: 13px;
+    flex: 1;
+  }
+
+  .filter-bar {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #1a1a1a;
+    margin: -28px -32px 0;
+    padding: 16px 32px 12px;
+    border-bottom: 1px solid #2a2a2a;
+  }
+
+  .filter-input {
+    width: 100%;
+    background: #111;
+    border: 1px solid #2a2a2a;
+    border-radius: 6px;
+    color: #e8e8e8;
+    font-size: 14px;
+    padding: 9px 14px;
+    outline: none;
+    display: block;
+  }
+
+  .filter-input:focus { border-color: #7c6af7; }
+  .filter-input::placeholder { color: #555; }
+
+  .list-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid #1f1f1f;
+    cursor: pointer;
+    font-size: 14px;
+    color: #ccc;
+    user-select: none;
+  }
+
+  .list-item:hover { color: #e8e8e8; }
+
+  .list-item input {
+    accent-color: #7c6af7;
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+
+  .sentinel { height: 1px; }
+
+  .loading-more {
+    color: #555;
+    font-size: 13px;
+    text-align: center;
+    padding: 12px 0;
   }
 
   .dot {
@@ -287,6 +351,11 @@ function render(payload) {
     root.querySelectorAll('.actions button').forEach(btn => {
       btn.onclick = () => respond({ action: btn.dataset.action });
     });
+    return;
+  }
+
+  if ((payload.type === 'choose' || payload.type === 'pick_many') && payload.filter) {
+    renderFilterable(payload);
     return;
   }
 
@@ -369,6 +438,139 @@ function render(payload) {
       }
     }
   }
+}
+
+function renderFilterable(payload) {
+  const multi = payload.type === 'pick_many';
+  const hasImages = payload.options.some(o => o.image);
+  const inputType = multi ? 'checkbox' : 'radio';
+
+  root.innerHTML = `
+    <div class="card">
+      ${payload.title ? `<h2>${esc(payload.title)}</h2>` : ''}
+      <div class="filter-bar"><input class="filter-input" id="filter-input" placeholder="Filter…" autocomplete="off"></div>
+      <div id="items-container"></div>
+      <div class="sentinel" id="sentinel"></div>
+      <div class="loading-more" id="loading-more" style="display:none">Loading…</div>
+      <div class="submit-row">
+        <span class="tally" id="tally"></span>
+        <button class="primary" id="btn-submit">${multi ? 'Select' : 'Choose'}</button>
+      </div>
+    </div>`;
+
+  let items = [...payload.options];
+  let offset = payload.options.length;
+  let total = payload.total || payload.options.length;
+  let query = '';
+  let loading = false;
+  let allLoaded = offset >= total;
+
+  const container = document.getElementById('items-container');
+  const sentinel = document.getElementById('sentinel');
+  const loadingEl = document.getElementById('loading-more');
+  const tally = document.getElementById('tally');
+  const filterInput = document.getElementById('filter-input');
+
+  function updateTally() {
+    const n = selected.size;
+    tally.textContent = n > 0 ? `${n} selected` : '';
+  }
+
+  function makeItem(o) {
+    if (hasImages) {
+      const div = document.createElement('div');
+      div.className = 'option-card' + (selected.has(o.label) ? ' selected' : '');
+      div.dataset.label = o.label;
+      div.innerHTML = `<img src="/static${o.image}" alt="${esc(o.label)}" loading="lazy"><div class="option-label">${esc(o.label)}</div>`;
+      div.onclick = () => toggleItem(o.label, div);
+      return div;
+    } else {
+      const label = document.createElement('label');
+      label.className = 'list-item';
+      label.innerHTML = `<input type="${inputType}" name="pick" ${selected.has(o.label) ? 'checked' : ''} data-label="${esc(o.label)}"><span>${esc(o.label)}</span>`;
+      label.querySelector('input').onchange = (e) => {
+        if (!multi) {
+          selected.clear();
+          container.querySelectorAll('input').forEach(i => i.checked = false);
+          e.target.checked = true;
+        }
+        if (e.target.checked) selected.add(o.label);
+        else selected.delete(o.label);
+        updateTally();
+      };
+      return label;
+    }
+  }
+
+  function toggleItem(label, el) {
+    if (!multi) { selected.clear(); container.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected')); }
+    if (selected.has(label)) { selected.delete(label); el.classList.remove('selected'); }
+    else { selected.add(label); el.classList.add('selected'); }
+    updateTally();
+  }
+
+  function renderItems(newItems, append = false) {
+    if (!append) container.innerHTML = '';
+    if (hasImages) {
+      let grid = container.querySelector('.image-grid');
+      if (!grid) { grid = document.createElement('div'); grid.className = 'image-grid'; container.appendChild(grid); }
+      newItems.forEach(o => grid.appendChild(makeItem(o)));
+    } else {
+      newItems.forEach(o => container.appendChild(makeItem(o)));
+    }
+  }
+
+  async function loadMore() {
+    if (loading || allLoaded) return;
+    loading = true;
+    loadingEl.style.display = 'block';
+    const params = new URLSearchParams({ offset, limit: 48, ...(query ? { q: query } : {}) });
+    const data = await fetch(`/ui/page?${params}`).then(r => r.json());
+    renderItems(data.items, true);
+    items = items.concat(data.items);
+    offset += data.items.length;
+    total = data.total;
+    allLoaded = offset >= total;
+    loading = false;
+    loadingEl.style.display = 'none';
+  }
+
+  // Infinite scroll
+  const observer = new IntersectionObserver(entries => {
+    if (entries[0].isIntersecting) loadMore();
+  }, { threshold: 0 });
+  observer.observe(sentinel);
+
+  // Filter (debounced)
+  let debounceTimer;
+  filterInput.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(async () => {
+      query = filterInput.value.trim();
+      selected.clear();
+      offset = 0;
+      allLoaded = false;
+      items = [];
+      const params = new URLSearchParams({ offset: 0, limit: 48, ...(query ? { q: query } : {}) });
+      const data = await fetch(`/ui/page?${params}`).then(r => r.json());
+      renderItems(data.items, false);
+      items = data.items;
+      offset = data.items.length;
+      total = data.total;
+      allLoaded = offset >= total;
+      updateTally();
+    }, 200);
+  });
+
+  // Submit
+  document.getElementById('btn-submit').onclick = () => {
+    respond(multi ? { chosen: [...selected] } : { chosen: [...selected][0] });
+  };
+
+  // Initial render
+  renderItems(items, false);
+  updateTally();
+  filterInput.focus();
 }
 
 async function respond(data) {
