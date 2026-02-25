@@ -32,10 +32,24 @@ function restoreFocus() {
   previousApp = null;
 }
 
+function getScreenSize() {
+  return new Promise((resolve) => {
+    exec(`osascript -e 'tell application "Finder" to get bounds of window of desktop'`, (err, stdout) => {
+      if (err) return resolve({ w: 1440, h: 900 });
+      const [, , w, h] = stdout.trim().split(', ').map(Number);
+      resolve({ w, h });
+    });
+  });
+}
+
 async function openBrowser() {
   previousApp = await captureFrontApp();
+  const { w, h } = await getScreenSize();
+  const winW = 780, winH = 580;
+  const x = Math.round((w - winW) / 2);
+  const y = Math.round((h - winH) / 2);
   const url = `http://localhost:${serverPort}`;
-  exec(`open -na "Google Chrome" --args --app=${url} --window-size=760,560`, (err) => {
+  exec(`open -na "Google Chrome" --args --app=${url} --window-size=${winW},${winH} --window-position=${x},${y}`, (err) => {
     if (err) exec(`open "${url}"`);
   });
 }
