@@ -145,11 +145,12 @@ app.post('/ui', async (req, res) => {
 
 // --- Browser posts response back here ---
 app.post('/response', (req, res) => {
-  restoreFocus();
   if (pendingResolve) {
     pendingResolve(req.body);
   }
   res.json({ ok: true });
+  // Delay focus restore so the window is fully closed before switching apps
+  setTimeout(restoreFocus, 200);
 });
 
 // --- Serve local files by absolute path ---

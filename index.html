@@ -372,7 +372,6 @@ function render(payload) {
 }
 
 async function respond(data) {
-  document.body.style.visibility = 'hidden';
   await fetch('/response', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
