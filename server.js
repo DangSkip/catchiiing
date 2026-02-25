@@ -16,8 +16,24 @@ let shutdownTimer = null;
 let pendingResolve = null;
 let sseWaiters = [];
 let serverPort = null;
+let previousApp = null;
 
-function openBrowser() {
+function captureFrontApp() {
+  return new Promise((resolve) => {
+    exec(`osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true'`, (err, stdout) => {
+      resolve(err ? null : stdout.trim());
+    });
+  });
+}
+
+function restoreFocus() {
+  if (!previousApp) return;
+  exec(`osascript -e 'tell application "${previousApp}" to activate'`);
+  previousApp = null;
+}
+
+async function openBrowser() {
+  previousApp = await captureFrontApp();
   const url = `http://localhost:${serverPort}`;
   exec(`open -na "Google Chrome" --args --app=${url} --window-size=760,560`, (err) => {
     if (err) exec(`open "${url}"`);
@@ -94,6 +110,7 @@ app.post('/ui', async (req, res) => {
 
 // --- Browser posts response back here ---
 app.post('/response', (req, res) => {
+  restoreFocus();
   if (pendingResolve) {
     pendingResolve(req.body);
   }
