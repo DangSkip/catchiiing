@@ -1,19 +1,19 @@
-# ui-bridge
+# promptui
 
-A lightweight local server that gives Claude Code a browser-based UI layer — visual image pickers, confirm dialogs, multi-select — without leaving the terminal.
+Browser-based UI prompts for Claude Code — image pickers, confirmations, reviews, checklists — without leaving the terminal.
 
 ```
-npx ui-bridge
+npx promptui
 ```
 
-The server opens a Chrome app window (no address bar, no tabs) automatically when needed, waits for your input, then closes and snaps focus back to your terminal.
+The server opens a Chrome app window automatically when needed, waits for your input, then closes and snaps focus back to your terminal.
 
 ---
 
 ## Usage from Claude Code
 
 ```bash
-PORT=$(cat /tmp/ui-bridge.port)
+PORT=$(cat /tmp/promptui.port)
 
 # Show a message
 curl -s -X POST localhost:$PORT/ui --json '{"type":"display","title":"Done","body":"Redesign complete."}'
@@ -33,42 +33,52 @@ curl -s -X POST localhost:$PORT/ui --json '{
 }'
 # → {"chosen":"A"}
 
-# Pick many
-# same structure, "type":"pick_many" → {"chosen":["A","C"]}
+# Pick many with filter + infinite scroll
+curl -s -X POST localhost:$PORT/ui --json '{
+  "type": "pick_many",
+  "title": "Select tests to re-run",
+  "filter": true,
+  "options": [...]
+}'
+# → {"chosen":["A","C"]}
+
+# Review markdown with custom actions
+curl -s -X POST localhost:$PORT/ui --json '{
+  "type": "review",
+  "title": "Draft",
+  "body": "## Markdown or HTML here",
+  "actions": ["Send it", "Rewrite", "Skip"]
+}'
+# → {"action":"Send it"}
 ```
 
 ---
 
-## /pick skill
+## /promptui skill
 
-This repo ships a Claude Code skill at `.claude/commands/pick.md`.
+This repo ships a Claude Code skill at `.claude/commands/promptui.md`.
 
-When working in a project that has `ui-bridge` available, type `/pick` in Claude Code to trigger a visual picker. Claude will:
-
-1. Ensure the server is running
-2. Gather options from context (files, images, text choices)
-3. Open the visual window
-4. Get your selection and continue
-
-**Install the skill globally** by copying it to your user commands folder:
+**Install globally:**
 
 ```bash
-cp .claude/commands/pick.md ~/.claude/commands/pick.md
+cp .claude/commands/promptui.md ~/.claude/commands/promptui.md
 ```
+
+Then type `/promptui` in any Claude Code session to trigger a UI prompt. Claude will gather options from context, open the window, and act on your response.
 
 ---
 
 ## File structure
 
 ```
-ui-bridge/
-├── package.json          # bin entry → npx ui-bridge
-├── server.js             # Express server + SSE
-├── index.html            # Frontend (dark, minimal)
-├── CLAUDE.md             # Instructions for Claude Code
+promptui/
+├── package.json
+├── server.js
+├── index.html
+├── CLAUDE.md
 ├── .claude/
 │   └── commands/
-│       └── pick.md       # /pick skill
+│       └── promptui.md
 └── README.md
 ```
 
