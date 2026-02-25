@@ -18,7 +18,8 @@ let shutdownTimer = null;
 let pendingResolve = null;
 let sseWaiters = [];
 let serverPort = null;
-let frontApp = null; // used only for centering
+let frontApp = null;
+let openBrowserDone = null; // resolves when window is positioned
 
 function captureFrontApp() {
   return new Promise((resolve) => {
@@ -28,9 +29,12 @@ function captureFrontApp() {
   });
 }
 
-function centerWindow(callback) {
+async function openBrowser() {
+  frontApp = await captureFrontApp();
   const W = WIN_W, H = WIN_H;
-  const script = frontApp ? `
+  const url = `http://localhost:${serverPort}`;
+
+  const centerExpr = frontApp ? `
 try
   tell application "System Events"
     tell process "${frontApp}"
@@ -43,29 +47,33 @@ try
 on error
   set cx to 200
   set cy to 200
-end try
-tell application "Google Chrome" to set bounds of front window to {cx, cy, cx + ${W}, cy + ${H}}
-` : `
+end try` : `
 tell application "Finder" to set sb to bounds of window of desktop
 set cx to (item 3 of sb - ${W}) div 2
-set cy to (item 4 of sb - ${H}) div 2
-tell application "Google Chrome" to set bounds of front window to {cx, cy, cx + ${W}, cy + ${H}}
-`;
-  const child = exec('osascript', () => { if (callback) callback(); });
-  child.stdin.write(script);
-  child.stdin.end();
-}
+set cy to (item 4 of sb - ${H}) div 2`;
 
-async function openBrowser() {
-  frontApp = await captureFrontApp();
-  const url = `http://localhost:${serverPort}`;
-  // Isolated Chrome profile: no other windows in this profile, so when it
-  // closes macOS naturally returns focus to whatever was active before.
-  exec(
-    `open -na "Google Chrome" --args --app=${url} --window-size=${WIN_W},${WIN_H} ` +
-    `--user-data-dir=${CHROME_PROFILE} --no-first-run --no-default-browser-check`,
-    (err) => { if (err) exec(`open "${url}"`); }
-  );
+  // Single AppleScript: calc position → launch Chrome with hint → poll and
+  // set bounds the moment the window appears (catches it before user sees it)
+  const script = `
+${centerExpr}
+do shell script "open -na 'Google Chrome' --args --app='${url}' --window-size=${W},${H} --window-position=" & (cx as text) & "," & (cy as text) & " --user-data-dir='${CHROME_PROFILE}' --no-first-run --no-default-browser-check"
+repeat with i from 1 to 150
+  delay 0.02
+  try
+    tell application "Google Chrome"
+      if (count of windows) > 0 then
+        set bounds of front window to {cx, cy, cx + ${W}, cy + ${H}}
+        exit repeat
+      end if
+    end tell
+  end try
+end repeat`;
+
+  openBrowserDone = new Promise((resolve) => {
+    const child = exec('osascript', () => resolve());
+    child.stdin.write(script);
+    child.stdin.end();
+  });
 }
 
 function waitForSSE(timeoutMs = 15000) {
@@ -93,9 +101,19 @@ app.get('/events', (req, res) => {
   res.flushHeaders();
 
   sseRes = res;
-  centerWindow(() => {
+
+  const sendReady = () => {
     if (sseRes) sseRes.write(`data: ${JSON.stringify({ type: '_ready' })}\n\n`);
-  });
+  };
+
+  if (openBrowserDone) {
+    // Wait for the positioning AppleScript to finish before revealing
+    openBrowserDone.then(sendReady);
+    openBrowserDone = null;
+  } else {
+    // Reconnect — window already positioned
+    sendReady();
+  }
 
   const waiters = sseWaiters.slice();
   sseWaiters = [];
