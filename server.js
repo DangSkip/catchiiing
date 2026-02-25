@@ -35,11 +35,29 @@ function restoreFocus() {
 const WIN_W = 780, WIN_H = 580;
 
 function centerWindow() {
-  const script = `
+  // Center over the previousApp window — guaranteed to be on the right screen
+  const W = WIN_W, H = WIN_H;
+  const script = previousApp ? `
+try
+  tell application "System Events"
+    tell process "${previousApp}"
+      set {px, py} to position of window 1
+      set {pw, ph} to size of window 1
+    end tell
+  end tell
+  set cx to px + (pw - ${W}) div 2
+  set cy to py + (ph - ${H}) div 2
+on error
+  set cx to 200
+  set cy to 200
+end try
+tell application "Google Chrome" to set bounds of front window to {cx, cy, cx + ${W}, cy + ${H}}
+` : `
 tell application "Finder" to set sb to bounds of window of desktop
-set wx to ((item 3 of sb) - ${WIN_W}) div 2
-set wy to ((item 4 of sb) - ${WIN_H}) div 2
-tell application "Google Chrome" to set bounds of front window to {wx, wy, wx + ${WIN_W}, wy + ${WIN_H}}`;
+set cx to (item 3 of sb - ${W}) div 2
+set cy to (item 4 of sb - ${H}) div 2
+tell application "Google Chrome" to set bounds of front window to {cx, cy, cx + ${W}, cy + ${H}}
+`;
   const child = exec('osascript');
   child.stdin.write(script);
   child.stdin.end();
