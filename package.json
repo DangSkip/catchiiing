@@ -1,15 +1,16 @@
 {
-  "name": "ui-bridge",
+  "name": "promptui",
   "version": "1.0.0",
-  "description": "Browser-based UI layer for Claude Code — rich interactions without leaving the terminal",
+  "description": "Browser-based UI prompts for Claude Code — image pickers, confirmations, reviews, checklists",
   "bin": {
-    "ui-bridge": "./server.js"
+    "promptui": "./server.js"
   },
   "main": "server.js",
   "files": [
     "server.js",
     "index.html",
-    "CLAUDE.md"
+    "CLAUDE.md",
+    ".claude/commands/promptui.md"
   ],
   "dependencies": {
     "express": "^4.18.2"
@@ -17,6 +18,6 @@
   "engines": {
     "node": ">=18"
   },
-  "keywords": ["claude", "claude-code", "ui", "bridge", "sse"],
+  "keywords": ["claude", "claude-code", "ui", "prompt", "sse"],
   "license": "MIT"
 }

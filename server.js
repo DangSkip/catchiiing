@@ -8,8 +8,8 @@ const { exec } = require('child_process');
 const app = express();
 app.use(express.json());
 
-const PORT_FILE = '/tmp/ui-bridge.port';
-const CHROME_PROFILE = '/tmp/ui-bridge-chrome';
+const PORT_FILE = '/tmp/promptui.port';
+const CHROME_PROFILE = '/tmp/promptui-chrome';
 const SHUTDOWN_GRACE_MS = 60_000;
 const WIN_W = 780, WIN_H = 580;
 

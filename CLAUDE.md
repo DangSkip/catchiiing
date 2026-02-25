@@ -1,26 +1,24 @@
-# UI Bridge
+# promptui
 
 A lightweight local server that gives Claude Code a browser-based UI layer.
 
 ## Starting the server
 
-If `/tmp/ui-bridge.port` does not exist, start the server:
+If `/tmp/promptui.port` does not exist, start the server:
 
 ```bash
-npx ui-bridge
+npx promptui
 ```
-
-Then remind the user to open the URL printed to the terminal in their browser before continuing.
 
 ## Reading the port
 
 ```bash
-PORT=$(cat /tmp/ui-bridge.port)
+PORT=$(cat /tmp/promptui.port)
 ```
 
-## Sending UI events
+## Sending UI prompts
 
-All events are POSTed to `/ui`. The request blocks until the user responds.
+All prompts are POSTed to `/ui`. The request blocks until the user responds.
 
 ### display — show content, no input needed
 
@@ -56,15 +54,27 @@ curl -s -X POST localhost:$PORT/ui \
 
 Returns: `{"chosen":"Option A"}`
 
-Images are optional. Without images, options are rendered as buttons.
+Images are optional. Without images, options render as buttons.
+
+Add `"filter": true` for a searchable list with infinite scroll (good for large sets).
 
 ### pick_many — pick multiple options
 
 Same structure as `choose`. Returns: `{"chosen":["Option A","Option C"]}`
 
-## Checking if the browser is connected
+### review — read content and decide
 
-If `/ui` returns `{"error":"No browser connected..."}`, remind the user to open the browser URL.
+```bash
+curl -s -X POST localhost:$PORT/ui \
+  --json '{
+    "type": "review",
+    "title": "Draft message",
+    "body": "## Markdown or HTML here...",
+    "actions": ["Send it", "Rewrite", "Skip"]
+  }'
+```
+
+Returns: `{"action":"Send it"}`
 
 ## Notes
 
