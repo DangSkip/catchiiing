@@ -9,14 +9,16 @@ const app = express();
 app.use(express.json());
 
 const PORT_FILE = '/tmp/ui-bridge.port';
+const CHROME_PROFILE = '/tmp/ui-bridge-chrome';
 const SHUTDOWN_GRACE_MS = 60_000;
+const WIN_W = 780, WIN_H = 580;
 
 let sseRes = null;
 let shutdownTimer = null;
 let pendingResolve = null;
 let sseWaiters = [];
 let serverPort = null;
-let previousApp = null;
+let frontApp = null; // used only for centering
 
 function captureFrontApp() {
   return new Promise((resolve) => {
@@ -26,22 +28,12 @@ function captureFrontApp() {
   });
 }
 
-function restoreFocus() {
-  if (!previousApp) return;
-  exec(`osascript -e 'tell application "${previousApp}" to activate'`);
-  previousApp = null;
-}
-
-const WIN_W = 780, WIN_H = 580;
-
 function centerWindow(callback) {
-  // Center over the previousApp window — guaranteed to be on the right screen.
-  // Calls callback when done so the browser can be revealed.
   const W = WIN_W, H = WIN_H;
-  const script = previousApp ? `
+  const script = frontApp ? `
 try
   tell application "System Events"
-    tell process "${previousApp}"
+    tell process "${frontApp}"
       set {px, py} to position of window 1
       set {pw, ph} to size of window 1
     end tell
@@ -65,11 +57,15 @@ tell application "Google Chrome" to set bounds of front window to {cx, cy, cx + 
 }
 
 async function openBrowser() {
-  previousApp = await captureFrontApp();
+  frontApp = await captureFrontApp();
   const url = `http://localhost:${serverPort}`;
-  exec(`open -na "Google Chrome" --args --app=${url} --window-size=${WIN_W},${WIN_H}`, (err) => {
-    if (err) exec(`open "${url}"`);
-  });
+  // Isolated Chrome profile: no other windows in this profile, so when it
+  // closes macOS naturally returns focus to whatever was active before.
+  exec(
+    `open -na "Google Chrome" --args --app=${url} --window-size=${WIN_W},${WIN_H} ` +
+    `--user-data-dir=${CHROME_PROFILE} --no-first-run --no-default-browser-check`,
+    (err) => { if (err) exec(`open "${url}"`); }
+  );
 }
 
 function waitForSSE(timeoutMs = 15000) {
@@ -133,7 +129,6 @@ app.post('/ui', async (req, res) => {
     return res.json({ ok: true });
   }
 
-  // Block until /response comes back
   const result = await new Promise((resolve) => {
     pendingResolve = resolve;
     sseRes.write(`data: ${JSON.stringify(payload)}\n\n`);
@@ -149,8 +144,6 @@ app.post('/response', (req, res) => {
     pendingResolve(req.body);
   }
   res.json({ ok: true });
-  // Delay focus restore so the window is fully closed before switching apps
-  setTimeout(restoreFocus, 200);
 });
 
 // --- Serve local files by absolute path ---
