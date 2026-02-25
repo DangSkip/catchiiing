@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UI Bridge</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0f0f0f;
+    color: #e8e8e8;
+    font-family: system-ui, 'Inter', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 48px 24px;
+  }
+
+  #root {
+    width: 100%;
+    max-width: 720px;
+  }
+
+  .idle {
+    color: #666;
+    font-size: 14px;
+    margin-top: 48px;
+    text-align: center;
+  }
+
+  .card {
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+    padding: 28px 32px;
+    animation: fade-in 0.15s ease;
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  h2 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+
+  .body {
+    color: #b0b0b0;
+    font-size: 14px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    margin-bottom: 24px;
+  }
+
+  .actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  button {
+    background: transparent;
+    border: 1px solid #2a2a2a;
+    border-radius: 6px;
+    color: #e8e8e8;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 8px 18px;
+    transition: background 0.1s, border-color 0.1s;
+  }
+
+  button:hover {
+    background: #232323;
+    border-color: #444;
+  }
+
+  button.primary {
+    background: #7c6af7;
+    border-color: #7c6af7;
+    color: #fff;
+  }
+
+  button.primary:hover {
+    background: #9180f9;
+    border-color: #9180f9;
+  }
+
+  button.selected {
+    background: #7c6af7;
+    border-color: #7c6af7;
+    color: #fff;
+  }
+
+  .image-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  .option-card {
+    background: #111;
+    border: 2px solid #2a2a2a;
+    border-radius: 6px;
+    cursor: pointer;
+    overflow: hidden;
+    transition: border-color 0.1s;
+  }
+
+  .option-card:hover {
+    border-color: #444;
+  }
+
+  .option-card.selected {
+    border-color: #7c6af7;
+  }
+
+  .option-card img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  .option-label {
+    font-size: 13px;
+    padding: 10px 12px;
+    color: #ccc;
+  }
+
+  .option-card.selected .option-label {
+    color: #fff;
+  }
+
+  .submit-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 8px;
+  }
+
+  .status {
+    color: #666;
+    font-size: 13px;
+    margin-top: 16px;
+  }
+
+  .dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #3a3a3a;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+
+  .dot.live { background: #4caf50; }
+</style>
+</head>
+<body>
+<div id="root">
+  <p class="idle"><span class="dot" id="dot"></span><span id="status-text">Connecting…</span></p>
+</div>
+
+<script>
+const root = document.getElementById('root');
+const dot = document.getElementById('dot');
+const statusText = document.getElementById('status-text');
+
+let selected = new Set();
+let currentType = null;
+
+function render(payload) {
+  selected.clear();
+  currentType = payload.type;
+
+  if (payload.type === 'display') {
+    root.innerHTML = `
+      <div class="card">
+        <h2>${esc(payload.title || '')}</h2>
+        <div class="body">${esc(payload.body || '')}</div>
+      </div>`;
+    return;
+  }
+
+  if (payload.type === 'confirm') {
+    root.innerHTML = `
+      <div class="card">
+        <h2>${esc(payload.title || '')}</h2>
+        <div class="body">${esc(payload.body || '')}</div>
+        <div class="actions">
+          <button class="primary" id="btn-yes">Confirm</button>
+          <button id="btn-no">Cancel</button>
+        </div>
+      </div>`;
+    document.getElementById('btn-yes').onclick = () => respond({ confirmed: true });
+    document.getElementById('btn-no').onclick  = () => respond({ confirmed: false });
+    return;
+  }
+
+  if (payload.type === 'choose' || payload.type === 'pick_many') {
+    const multi = payload.type === 'pick_many';
+    const hasImages = payload.options.some(o => o.image);
+
+    if (hasImages) {
+      const cards = payload.options.map((o, i) => `
+        <div class="option-card" data-i="${i}" data-label="${esc(o.label)}">
+          <img src="/static${o.image}" alt="${esc(o.label)}" loading="lazy">
+          <div class="option-label">${esc(o.label)}</div>
+        </div>`).join('');
+
+      root.innerHTML = `
+        <div class="card">
+          <h2>${esc(payload.title || '')}</h2>
+          <div class="image-grid">${cards}</div>
+          <div class="submit-row">
+            <button class="primary" id="btn-submit">${multi ? 'Select' : 'Choose'}</button>
+          </div>
+        </div>`;
+
+      root.querySelectorAll('.option-card').forEach(card => {
+        card.onclick = () => {
+          if (!multi) selected.clear();
+          const label = card.dataset.label;
+          if (selected.has(label)) {
+            selected.delete(label);
+            card.classList.remove('selected');
+          } else {
+            selected.add(label);
+            card.classList.add('selected');
+            if (!multi) root.querySelectorAll('.option-card').forEach(c => {
+              if (c !== card) c.classList.remove('selected');
+            });
+          }
+        };
+      });
+    } else {
+      const btns = payload.options.map((o, i) =>
+        `<button data-label="${esc(o.label)}">${esc(o.label)}</button>`
+      ).join('');
+
+      root.innerHTML = `
+        <div class="card">
+          <h2>${esc(payload.title || '')}</h2>
+          <div class="actions" id="opts">${btns}</div>
+          ${multi ? '<div class="submit-row" style="margin-top:16px"><button class="primary" id="btn-submit">Select</button></div>' : ''}
+        </div>`;
+
+      root.querySelectorAll('#opts button').forEach(btn => {
+        btn.onclick = () => {
+          const label = btn.dataset.label;
+          if (!multi) {
+            root.querySelectorAll('#opts button').forEach(b => b.classList.remove('selected'));
+            selected.clear();
+            selected.add(label);
+            btn.classList.add('selected');
+            respond({ chosen: label });
+          } else {
+            if (selected.has(label)) {
+              selected.delete(label);
+              btn.classList.remove('selected');
+            } else {
+              selected.add(label);
+              btn.classList.add('selected');
+            }
+          }
+        };
+      });
+    }
+
+    if (multi || hasImages) {
+      const submitBtn = document.getElementById('btn-submit');
+      if (submitBtn) {
+        submitBtn.onclick = () => {
+          respond({ chosen: multi ? [...selected] : [...selected][0] });
+        };
+      }
+    }
+  }
+}
+
+async function respond(data) {
+  await fetch('/response', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  root.innerHTML = '<p class="idle"><span class="dot live"></span>Waiting for next event…</p>';
+}
+
+function esc(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function connect() {
+  const es = new EventSource('/events');
+
+  es.onopen = () => {
+    dot.className = 'dot live';
+    statusText.textContent = 'Connected — waiting for events…';
+  };
+
+  es.onmessage = (e) => {
+    const payload = JSON.parse(e.data);
+    render(payload);
+  };
+
+  es.onerror = () => {
+    dot.className = 'dot';
+    statusText.textContent = 'Disconnected — retrying…';
+    root.innerHTML = '<p class="idle"><span class="dot" id="dot"></span><span id="status-text">Disconnected — retrying…</span></p>';
+    es.close();
+    setTimeout(connect, 2000);
+  };
+}
+
+connect();
+</script>
+</body>
+</html>

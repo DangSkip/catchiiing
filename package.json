@@ -1,0 +1,22 @@
+{
+  "name": "ui-bridge",
+  "version": "1.0.0",
+  "description": "Browser-based UI layer for Claude Code — rich interactions without leaving the terminal",
+  "bin": {
+    "ui-bridge": "./server.js"
+  },
+  "main": "server.js",
+  "files": [
+    "server.js",
+    "index.html",
+    "CLAUDE.md"
+  ],
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": ["claude", "claude-code", "ui", "bridge", "sse"],
+  "license": "MIT"
+}
