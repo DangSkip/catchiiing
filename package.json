@@ -18,6 +18,14 @@
   "engines": {
     "node": ">=18"
   },
-  "keywords": ["claude", "claude-code", "ui", "prompt", "sse"],
-  "license": "MIT"
+  "keywords": ["claude", "claude-code", "ui", "prompt", "sse", "interactive", "cli"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DangSkip/promptui.git"
+  },
+  "homepage": "https://github.com/DangSkip/promptui#readme",
+  "bugs": {
+    "url": "https://github.com/DangSkip/promptui/issues"
+  }
 }
