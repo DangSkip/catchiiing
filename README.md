@@ -67,7 +67,7 @@ npm install -g promptui   # → ~/.claude/commands/promptui.md
 npm install promptui      # → <your-project>/.claude/commands/promptui.md
 ```
 
-Then type `/promptui` in any Claude Code session to trigger a UI prompt. Claude will gather options from context, open the window, and act on your response.
+Type `/promptui` in any Claude Code session, or reference it in your Claude Code configuration. For sub-agents, make sure to grant skill access explicitly.
 
 ---
 
