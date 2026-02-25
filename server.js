@@ -32,24 +32,23 @@ function restoreFocus() {
   previousApp = null;
 }
 
-function getScreenSize() {
-  return new Promise((resolve) => {
-    exec(`osascript -e 'tell application "Finder" to get bounds of window of desktop'`, (err, stdout) => {
-      if (err) return resolve({ w: 1440, h: 900 });
-      const [, , w, h] = stdout.trim().split(', ').map(Number);
-      resolve({ w, h });
-    });
-  });
+const WIN_W = 780, WIN_H = 580;
+
+function centerWindow() {
+  const script = `
+tell application "Finder" to set sb to bounds of window of desktop
+set wx to ((item 3 of sb) - ${WIN_W}) div 2
+set wy to ((item 4 of sb) - ${WIN_H}) div 2
+tell application "Google Chrome" to set bounds of front window to {wx, wy, wx + ${WIN_W}, wy + ${WIN_H}}`;
+  const child = exec('osascript');
+  child.stdin.write(script);
+  child.stdin.end();
 }
 
 async function openBrowser() {
   previousApp = await captureFrontApp();
-  const { w, h } = await getScreenSize();
-  const winW = 780, winH = 580;
-  const x = Math.round((w - winW) / 2);
-  const y = Math.round((h - winH) / 2);
   const url = `http://localhost:${serverPort}`;
-  exec(`open -na "Google Chrome" --args --app=${url} --window-size=${winW},${winH} --window-position=${x},${y}`, (err) => {
+  exec(`open -na "Google Chrome" --args --app=${url} --window-size=${WIN_W},${WIN_H}`, (err) => {
     if (err) exec(`open "${url}"`);
   });
 }
@@ -79,6 +78,7 @@ app.get('/events', (req, res) => {
   res.flushHeaders();
 
   sseRes = res;
+  centerWindow();
 
   const waiters = sseWaiters.slice();
   sseWaiters = [];
