@@ -2,11 +2,13 @@
 
 Browser-based UI prompts for Claude Code — image pickers, confirmations, reviews, checklists — without leaving the terminal.
 
-```
-npx promptui
+Install globally and Claude Code handles the rest:
+
+```bash
+npm install -g promptui
 ```
 
-The server opens a Chrome app window automatically when needed, waits for your input, then closes and snaps focus back to your terminal.
+A Chrome window opens when Claude needs your input, waits for your response, then closes and snaps focus back to your terminal.
 
 ---
 
@@ -58,18 +60,11 @@ curl -s -X POST localhost:$PORT/ui --json '{
 
 ## /promptui skill
 
-The `/promptui` Claude Code skill is installed automatically on `npm install`.
-
-**Global install** — skill goes to `~/.claude/commands/promptui.md` (available in every project):
+The `/promptui` Claude Code skill is installed automatically on `npm install` — globally or per-project:
 
 ```bash
-npm install -g promptui
-```
-
-**Local install** — skill goes to `<your-project>/.claude/commands/promptui.md`:
-
-```bash
-npm install promptui
+npm install -g promptui   # → ~/.claude/commands/promptui.md
+npm install promptui      # → <your-project>/.claude/commands/promptui.md
 ```
 
 Then type `/promptui` in any Claude Code session to trigger a UI prompt. Claude will gather options from context, open the window, and act on your response.
