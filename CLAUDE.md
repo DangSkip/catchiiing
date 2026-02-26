@@ -62,6 +62,22 @@ Add `"filter": true` for a searchable list with infinite scroll (good for large 
 
 Same structure as `choose`. Returns: `{"chosen":["Option A","Option C"]}`
 
+### text — free-text input
+
+```bash
+curl -s -X POST localhost:$PORT/ui \
+  --json '{
+    "type": "text",
+    "title": "What should we change?",
+    "body": "Describe the modifications you want.",
+    "placeholder": "e.g. make her hair brown, remove the hat…"
+  }'
+```
+
+Returns: `{"text":"make her hair brown"}`
+
+`body` and `placeholder` are optional. Supports Cmd+Enter / Ctrl+Enter to submit.
+
 ### review — read content and decide
 
 ```bash

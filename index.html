@@ -268,6 +268,25 @@
     cursor: pointer;
   }
 
+  .text-input {
+    width: 100%;
+    min-height: 100px;
+    background: #111;
+    border: 1px solid #2a2a2a;
+    border-radius: 6px;
+    color: #e8e8e8;
+    font-family: system-ui, 'Inter', sans-serif;
+    font-size: 14px;
+    padding: 12px 14px;
+    outline: none;
+    resize: vertical;
+    line-height: 1.5;
+    margin-bottom: 16px;
+  }
+
+  .text-input:focus { border-color: #7c6af7; }
+  .text-input::placeholder { color: #555; }
+
   .sentinel { height: 1px; }
 
   .loading-more {
@@ -350,6 +369,33 @@ function render(payload) {
       </div>`;
     root.querySelectorAll('.actions button').forEach(btn => {
       btn.onclick = () => respond({ action: btn.dataset.action });
+    });
+    return;
+  }
+
+  if (payload.type === 'text') {
+    root.innerHTML = `
+      <div class="card">
+        ${payload.title ? `<h2>${esc(payload.title)}</h2>` : ''}
+        ${payload.body ? `<div class="md">${renderBody(payload.body)}</div>` : ''}
+        <textarea class="text-input" id="text-input" placeholder="${esc(payload.placeholder || 'Type your answer here…')}" autofocus></textarea>
+        <div class="actions">
+          <button class="primary" id="btn-submit">Submit</button>
+        </div>
+      </div>`;
+    const textInput = document.getElementById('text-input');
+    const submitBtn = document.getElementById('btn-submit');
+    textInput.focus();
+    submitBtn.onclick = () => {
+      const value = textInput.value.trim();
+      if (value) respond({ text: value });
+    };
+    textInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        const value = textInput.value.trim();
+        if (value) respond({ text: value });
+      }
     });
     return;
   }
