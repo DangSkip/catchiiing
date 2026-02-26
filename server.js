@@ -75,6 +75,7 @@ repeat with i from 1 to 150
     tell application "Google Chrome"
       if (count of windows) > 0 then
         set bounds of front window to {cx, cy, cx + ${W}, cy + ${H}}
+        activate
         exit repeat
       end if
     end tell
@@ -152,6 +153,9 @@ app.post('/ui', async (req, res) => {
     } catch (e) {
       return res.status(503).json({ error: e.message });
     }
+  } else {
+    // Browser already connected — bring window to front
+    exec(`osascript -e 'tell application "Google Chrome" to activate'`);
   }
 
   if (payload.type === 'display') {
@@ -187,6 +191,10 @@ app.post('/ui', async (req, res) => {
   }
 
   pendingResolve = null;
+  // Return focus to the app that launched the prompt
+  if (frontApp) {
+    exec(`osascript -e 'tell application "${frontApp}" to activate'`);
+  }
   res.json(result);
 });
 
