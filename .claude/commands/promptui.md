@@ -71,3 +71,66 @@ Infer sensible options from context. Use absolute paths in the `image` field for
 - Add `"filter": true` for lists longer than ~10 items
 - Keep titles short — they're headings
 - The window opens automatically, closes on response, focus returns here
+
+## Caching large pickers
+
+When building a picker from many files or a slow command (>~20 items), cache the
+payload to avoid regeneration on future runs.
+
+**Cache directory** (per-project, never committed):
+```bash
+GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
+if [ -n "$GIT_DIR" ]; then
+  CACHE_DIR="$GIT_DIR/promptui-cache"
+else
+  HASH=$(pwd | shasum | cut -c1-8)
+  CACHE_DIR="/tmp/promptui-cache-$HASH"
+fi
+mkdir -p "$CACHE_DIR"
+KEY=$(echo "$SOURCE" | shasum | cut -c1-12)
+CACHE="$CACHE_DIR/$KEY.json"
+```
+
+**Staleness check** — diff the actual source items against what's cached:
+```bash
+USE_CACHE=false
+if [ -f "$CACHE" ]; then
+  DIFF=$(diff \
+    <(jq -r '._cache.items[]' "$CACHE" 2>/dev/null | sort) \
+    <(ls "$SOURCE"/*.png 2>/dev/null | xargs -n1 basename | sed 's/\.png$//' | sort) \
+  )
+  [ -z "$DIFF" ] && USE_CACHE=true
+fi
+```
+
+**Cache file format** (payload JSON + embedded metadata):
+```json
+{
+  "_cache": { "source": "/abs/path", "items": ["label-a", "label-b"] },
+  "type": "choose",
+  "title": "...",
+  "options": [...]
+}
+```
+
+Build and save when stale, then POST:
+```bash
+if [ "$USE_CACHE" = "false" ]; then
+  # Build OPTIONS_JSON and FULL_PAYLOAD_JSON, then:
+  echo "$FULL_PAYLOAD_JSON" | jq \
+    --arg src "$SOURCE" \
+    --argjson items "$ITEMS_JSON_ARRAY" \
+    '. + {"_cache": {"source": $src, "items": $items}}' \
+    > "$CACHE"
+fi
+PORT=$(cat /tmp/promptui.port)
+RESULT=$(curl -s -X POST localhost:$PORT/ui --json @"$CACHE")
+```
+
+For command-generated lists (git branches, etc.), `SOURCE` = the command string,
+`items` = sorted output lines, diff against `$($SOURCE_CMD | sort)`.
+
+**Rules:**
+- Never cache `confirm`, `review`, or `display` — contextual and cheap
+- Always use absolute paths as `SOURCE` for unambiguous cache keys
+- `items` must be sorted consistently (use `sort`) for reliable diffing
