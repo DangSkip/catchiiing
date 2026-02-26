@@ -31,7 +31,17 @@ function captureFrontApp() {
   });
 }
 
+async function killStaleChromeWindows() {
+  // Kill any existing promptui Chrome instances so we get a fresh window on the new port
+  return new Promise((resolve) => {
+    exec(`pkill -f 'user-data-dir=${CHROME_PROFILE}'`, () => resolve());
+  });
+}
+
 async function openBrowser() {
+  await killStaleChromeWindows();
+  await new Promise((resolve) => setTimeout(resolve, 500));
+
   frontApp = await captureFrontApp();
   const W = WIN_W, H = WIN_H;
   const url = `http://localhost:${serverPort}`;
@@ -160,10 +170,21 @@ app.post('/ui', async (req, res) => {
     };
   }
 
-  const result = await new Promise((resolve) => {
-    pendingResolve = resolve;
-    sseRes.write(`data: ${JSON.stringify(payload)}\n\n`);
-  });
+  const UI_TIMEOUT_MS = 5 * 60_000; // 5 minutes max wait for user interaction
+  let result;
+  try {
+    result = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        pendingResolve = null;
+        reject(new Error('UI timed out waiting for user response'));
+      }, UI_TIMEOUT_MS);
+      pendingResolve = (value) => { clearTimeout(timer); resolve(value); };
+      sseRes.write(`data: ${JSON.stringify(payload)}\n\n`);
+    });
+  } catch (e) {
+    pendingResolve = null;
+    return res.status(504).json({ error: e.message });
+  }
 
   pendingResolve = null;
   res.json(result);
@@ -203,8 +224,10 @@ app.get('/', (req, res) => {
 });
 
 // --- Start ---
-const server = app.listen(0, '127.0.0.1', () => {
+const server = app.listen(0, '127.0.0.1', async () => {
   serverPort = server.address().port;
   fs.writeFileSync(PORT_FILE, String(serverPort));
+  // Kill any stale Chrome windows from a previous session pointing at a dead port
+  await killStaleChromeWindows();
   console.log(`\nUI Bridge running → http://localhost:${serverPort}\n`);
 });
