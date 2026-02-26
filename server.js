@@ -38,6 +38,15 @@ async function killStaleChromeWindows() {
   });
 }
 
+function focusPromptUIWindow() {
+  // Find the Chrome process using our user-data-dir and bring it to front via PID
+  exec(`pgrep -f 'app=http://localhost.*user-data-dir=${CHROME_PROFILE}'`, (err, stdout) => {
+    if (err || !stdout.trim()) return;
+    const pid = stdout.trim().split('\n')[0];
+    exec(`osascript -e 'tell application "System Events" to set frontmost of (first process whose unix id is ${pid}) to true'`);
+  });
+}
+
 async function openBrowser() {
   await killStaleChromeWindows();
   await new Promise((resolve) => setTimeout(resolve, 500));
@@ -75,7 +84,6 @@ repeat with i from 1 to 150
     tell application "Google Chrome"
       if (count of windows) > 0 then
         set bounds of front window to {cx, cy, cx + ${W}, cy + ${H}}
-        activate
         exit repeat
       end if
     end tell
@@ -153,10 +161,10 @@ app.post('/ui', async (req, res) => {
     } catch (e) {
       return res.status(503).json({ error: e.message });
     }
-  } else {
-    // Browser already connected — bring window to front
-    exec(`osascript -e 'tell application "Google Chrome" to activate'`);
   }
+
+  // Bring promptui window to front
+  focusPromptUIWindow();
 
   if (payload.type === 'display') {
     sseRes.write(`data: ${JSON.stringify(payload)}\n\n`);
