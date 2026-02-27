@@ -287,6 +287,56 @@
   .text-input:focus { border-color: #7c6af7; }
   .text-input::placeholder { color: #555; }
 
+  /* review_each — per-item action list */
+  .review-list { margin-bottom: 8px; }
+
+  .review-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 0;
+    border-bottom: 1px solid #1f1f1f;
+  }
+
+  .review-row:last-child { border-bottom: none; }
+
+  .review-row img {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 6px;
+    flex-shrink: 0;
+    background: #111;
+  }
+
+  .review-row .review-label {
+    flex: 1;
+    font-size: 14px;
+    color: #ccc;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .review-row .review-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .review-row .review-actions button {
+    font-size: 12px;
+    padding: 5px 12px;
+    border-radius: 5px;
+  }
+
+  .review-row .review-actions button.active {
+    background: #7c6af7;
+    border-color: #7c6af7;
+    color: #fff;
+  }
+
   .sentinel { height: 1px; }
 
   .loading-more {
@@ -397,6 +447,54 @@ function render(payload) {
         if (value) respond({ text: value });
       }
     });
+    return;
+  }
+
+  if (payload.type === 'review_each') {
+    const actions = payload.actions || ['Keep', 'Ditch'];
+    const decisions = {};
+
+    const rows = payload.options.map((o, i) => {
+      const imgTag = o.image ? `<img src="/static${o.image}" alt="${esc(o.label)}" loading="lazy">` : '';
+      const btns = actions.map(a =>
+        `<button data-i="${i}" data-action="${esc(a)}">${esc(a)}</button>`
+      ).join('');
+      return `<div class="review-row" data-i="${i}">${imgTag}<span class="review-label">${esc(o.label)}</span><span class="review-actions">${btns}</span></div>`;
+    }).join('');
+
+    root.innerHTML = `
+      <div class="card">
+        ${payload.title ? `<h2>${esc(payload.title)}</h2>` : ''}
+        ${payload.body ? `<div class="md">${renderBody(payload.body)}</div>` : ''}
+        <div class="review-list">${rows}</div>
+        <div class="submit-row">
+          <span class="tally" id="tally">0 / ${payload.options.length} decided</span>
+          <button class="primary" id="btn-submit">Done</button>
+        </div>
+      </div>`;
+
+    const tally = document.getElementById('tally');
+    const total = payload.options.length;
+
+    root.querySelectorAll('.review-actions button').forEach(btn => {
+      btn.onclick = () => {
+        const idx = btn.dataset.i;
+        const action = btn.dataset.action;
+        decisions[idx] = action;
+        // highlight active button in this row
+        btn.closest('.review-actions').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        tally.textContent = `${Object.keys(decisions).length} / ${total} decided`;
+      };
+    });
+
+    document.getElementById('btn-submit').onclick = () => {
+      const results = payload.options.map((o, i) => ({
+        label: o.label,
+        action: decisions[i] || null,
+      }));
+      respond({ results });
+    };
     return;
   }
 

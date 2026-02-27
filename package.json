@@ -3,10 +3,12 @@
   "version": "0.2.0",
   "description": "Browser-based UI prompts for Claude Code — image pickers, confirmations, reviews, checklists",
   "bin": {
-    "promptui": "./server.js"
+    "promptui": "./cli.js"
   },
   "main": "server.js",
   "files": [
+    "cli.js",
+    "parse-md.js",
     "server.js",
     "index.html",
     "CLAUDE.md",
