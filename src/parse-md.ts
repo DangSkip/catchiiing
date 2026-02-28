@@ -219,6 +219,18 @@ function parseMd(raw: string): Payload {
 
   const type = inferType(meta, { options, body, hasImages });
 
+  // Range type: pass through numeric frontmatter keys
+  if (type === 'range') {
+    const payload: Record<string, unknown> = { type: 'range' };
+    if (title) payload.title = title;
+    if (body) payload.body = body;
+    if (meta.min !== undefined) payload.min = Number(meta.min);
+    if (meta.max !== undefined) payload.max = Number(meta.max);
+    if (meta.step !== undefined) payload.step = Number(meta.step);
+    if (meta.value !== undefined) payload.value = Number(meta.value);
+    return payload as unknown as Payload;
+  }
+
   // Compare type: split body on ## headings into sections
   if (type === 'compare') {
     const parsed = parseCompareSections(mdBody);

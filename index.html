@@ -420,6 +420,51 @@
 
   .toggle-track.on .toggle-thumb { left: 20px; }
 
+  /* range — slider */
+  .range-wrapper {
+    margin-bottom: 20px;
+  }
+
+  .range-value {
+    text-align: center;
+    font-size: 32px;
+    font-weight: 700;
+    color: #e8e8e8;
+    margin-bottom: 16px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .range-slider {
+    width: 100%;
+    appearance: none;
+    height: 6px;
+    background: #2a2a2a;
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  .range-slider::-webkit-slider-thumb {
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #7c6af7;
+    cursor: grab;
+    border: 2px solid #1a1a1a;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  }
+
+  .range-slider::-webkit-slider-thumb:active { cursor: grabbing; }
+
+  .range-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: #666;
+    margin-top: 8px;
+  }
+
   /* rank — drag to reorder */
   .rank-list { margin-bottom: 8px; }
 
@@ -676,6 +721,36 @@ function render(payload) {
         if (value) respond({ text: value });
       }
     });
+    return;
+  }
+
+  if (payload.type === 'range') {
+    const min = payload.min != null ? payload.min : 0;
+    const max = payload.max != null ? payload.max : 100;
+    const step = payload.step != null ? payload.step : 1;
+    const initial = payload.value != null ? payload.value : Math.round((min + max) / 2 / step) * step;
+
+    root.innerHTML = `
+      <div class="card">
+        ${payload.title ? `<h2>${esc(payload.title)}</h2>` : ''}
+        ${payload.body ? `<div class="md">${renderBody(payload.body)}</div>` : ''}
+        <div class="range-wrapper">
+          <div class="range-value" id="range-display">${initial}</div>
+          <input type="range" class="range-slider" id="range-slider" min="${min}" max="${max}" step="${step}" value="${initial}">
+          <div class="range-labels"><span>${min}</span><span>${max}</span></div>
+        </div>
+        <div class="actions">
+          <button class="primary" id="btn-submit">Submit</button>
+        </div>
+      </div>`;
+
+    const slider = document.getElementById('range-slider');
+    const display = document.getElementById('range-display');
+    slider.addEventListener('input', () => { display.textContent = slider.value; });
+
+    document.getElementById('btn-submit').onclick = () => {
+      respond({ value: Number(slider.value) });
+    };
     return;
   }
 

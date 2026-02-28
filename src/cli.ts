@@ -123,6 +123,7 @@ function formatResponse(json: ServerResponse): { text: string; code: number } {
   }
   if ('confirmed' in json) return { text: json.confirmed ? 'yes' : 'no', code: 0 };
   if ('action' in json) return { text: String(json.action), code: 0 };
+  if ('value' in json) return { text: String(json.value), code: 0 };
   if ('text' in json) return { text: String(json.text), code: 0 };
   if ('ok' in json) return { text: 'ok', code: 0 };
   return { text: JSON.stringify(json), code: 0 };

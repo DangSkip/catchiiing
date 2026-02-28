@@ -10,7 +10,8 @@ export type PromptType =
   | 'review_each'
   | 'form'
   | 'compare'
-  | 'rank';
+  | 'rank'
+  | 'range';
 
 // --- Option items ---
 
@@ -105,6 +106,16 @@ export interface RankPayload {
   options: OptionItem[];
 }
 
+export interface RangePayload {
+  type: 'range';
+  title?: string;
+  body?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  value?: number;
+}
+
 export type Payload =
   | DisplayPayload
   | ConfirmPayload
@@ -115,7 +126,8 @@ export type Payload =
   | ReviewEachPayload
   | FormPayload
   | ComparePayload
-  | RankPayload;
+  | RankPayload
+  | RangePayload;
 
 // --- Response interfaces ---
 
@@ -160,6 +172,10 @@ export interface RankResponse {
   ranked: string[];
 }
 
+export interface RangeResponse {
+  value: number;
+}
+
 export interface ErrorResponse {
   error: string;
 }
@@ -174,6 +190,7 @@ export type ServerResponse =
   | ReviewEachResponse
   | FormResponse
   | RankResponse
+  | RangeResponse
   | ErrorResponse;
 
 // --- parse-md internals ---
