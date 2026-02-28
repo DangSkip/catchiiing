@@ -13,7 +13,8 @@ export type PromptType =
   | 'rank'
   | 'range'
   | 'rating'
-  | 'file';
+  | 'file'
+  | 'upload';
 
 // --- Option items ---
 
@@ -146,6 +147,20 @@ export interface FilePickerResponse {
   chosen: string | string[];
 }
 
+export interface UploadPayload {
+  type: 'upload';
+  title?: string;
+  body?: string;
+  dest: string;
+  extensions?: string[];
+  multi?: boolean;
+  maxSize?: number;
+}
+
+export interface UploadResponse {
+  uploaded: string[];
+}
+
 export type Payload =
   | DisplayPayload
   | ConfirmPayload
@@ -159,7 +174,8 @@ export type Payload =
   | RankPayload
   | RangePayload
   | RatingPayload
-  | FilePickerPayload;
+  | FilePickerPayload
+  | UploadPayload;
 
 // --- Response interfaces ---
 
@@ -229,6 +245,7 @@ export type ServerResponse =
   | RangeResponse
   | RatingResponse
   | FilePickerResponse
+  | UploadResponse
   | ErrorResponse;
 
 // --- parse-md internals ---

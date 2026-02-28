@@ -116,6 +116,11 @@ function formatResponse(json: ServerResponse): { text: string; code: number } {
       code: 0,
     };
   }
+  if ('uploaded' in json) {
+    const paths = (json as { uploaded: string[] }).uploaded;
+    if (paths.length === 1) return { text: paths[0], code: 0 };
+    return { text: paths.map(p => `- ${p}`).join('\n'), code: 0 };
+  }
   if ('chosen' in json) {
     if (Array.isArray(json.chosen))
       return { text: json.chosen.map(c => `- ${c}`).join('\n'), code: 0 };
@@ -151,21 +156,32 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Read markdown from file or stdin
-  let md: string;
+  // Read input from file or stdin
+  let raw: string;
   if (arg === '-') {
-    md = await readStdin();
+    raw = await readStdin();
   } else {
     const filePath = path.resolve(arg);
     if (!fs.existsSync(filePath)) {
       process.stderr.write(`promptui: file not found: ${arg}\n`);
       process.exit(1);
     }
-    md = fs.readFileSync(filePath, 'utf8');
+    raw = fs.readFileSync(filePath, 'utf8');
   }
 
-  // Parse markdown → JSON payload
-  const payload = parseMd(md);
+  // JSON passthrough if input starts with {, otherwise parse as markdown
+  let payload: Payload;
+  const trimmed = raw.trimStart();
+  if (trimmed.startsWith('{')) {
+    try {
+      payload = JSON.parse(trimmed);
+    } catch {
+      process.stderr.write('promptui: invalid JSON input\n');
+      process.exit(1);
+    }
+  } else {
+    payload = parseMd(raw);
+  }
 
   // Ensure server is running
   let port: number;

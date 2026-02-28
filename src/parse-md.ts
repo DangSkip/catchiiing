@@ -252,6 +252,18 @@ function parseMd(raw: string): Payload {
     return payload as unknown as Payload;
   }
 
+  // Upload: pass through dest, extensions, multi, maxSize
+  if (type === 'upload') {
+    const payload: Record<string, unknown> = { type: 'upload' };
+    if (title) payload.title = title;
+    if (body) payload.body = body;
+    if (meta.dest) payload.dest = meta.dest;
+    if (meta.extensions) payload.extensions = meta.extensions;
+    if (meta.multi === true) payload.multi = true;
+    if (meta.maxSize !== undefined) payload.maxSize = Number(meta.maxSize);
+    return payload as unknown as Payload;
+  }
+
   // Compare type: split body on ## headings into sections
   if (type === 'compare') {
     const parsed = parseCompareSections(mdBody);

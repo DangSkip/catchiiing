@@ -7,7 +7,10 @@ import { exec } from 'child_process';
 import { FileItem, OptionItem, ServerResponse } from './types';
 
 const app = express();
-app.use(express.json());
+app.use((req, res, next) => {
+  if (req.path === '/api/upload') return next();
+  express.json()(req, res, next);
+});
 
 const PORT_FILE = '/tmp/promptui.port';
 const CHROME_PROFILE = '/tmp/promptui-chrome';
@@ -23,6 +26,9 @@ let frontApp: string | null = null;
 let openBrowserDone: Promise<void> | null = null;
 let storedOptions: OptionItem[] = [];
 let filePickerRoot: string | null = null;
+let uploadDest: string | null = null;
+let uploadMaxSize: number | null = null;
+let uploadExtensions: string[] | null = null;
 const PAGE_SIZE = 48;
 
 function captureFrontApp(): Promise<string | null> {
@@ -173,6 +179,19 @@ app.post('/ui', async (req: Request, res: Response) => {
     filePickerRoot = path.resolve(payload.root || process.cwd());
   }
 
+  // Upload: store dest/limits server-side, strip dest from browser payload
+  if (payload.type === 'upload') {
+    uploadDest = path.resolve(payload.dest);
+    uploadMaxSize = payload.maxSize || null;
+    uploadExtensions = payload.extensions || null;
+    const { dest, maxSize: _ms, ...browserPayload } = payload;
+    payload = {
+      ...browserPayload,
+      extensions: uploadExtensions,
+      maxSize: uploadMaxSize,
+    };
+  }
+
   // For filterable payloads: store full list server-side, send first page only
   if (payload.filter && Array.isArray(payload.options)) {
     storedOptions = payload.options;
@@ -282,12 +301,75 @@ app.get('/api/ls', (req: Request, res: Response) => {
   });
 });
 
+// --- File upload endpoint (base64 via JSON) ---
+app.post('/api/upload', express.json({ limit: '50mb' }), (req: Request, res: Response) => {
+  if (!uploadDest) return res.status(400).json({ error: 'No active upload prompt' });
+
+  const files: { name: string; data: string }[] = req.body.files;
+  if (!Array.isArray(files) || files.length === 0) {
+    return res.status(400).json({ error: 'No files provided' });
+  }
+
+  // Ensure dest directory exists
+  const realDest = path.resolve(uploadDest);
+  fs.mkdirSync(realDest, { recursive: true });
+
+  const saved: string[] = [];
+
+  for (const file of files) {
+    // Sanitize filename: basename only, reject dot-prefix, replace illegal chars
+    let name = path.basename(file.name);
+    name = name.replace(/[<>:"|?*\x00-\x1f]/g, '_');
+    if (name.startsWith('.')) name = '_' + name;
+    if (!name) continue;
+
+    // Extension check
+    if (uploadExtensions && uploadExtensions.length > 0) {
+      const ext = path.extname(name).slice(1).toLowerCase();
+      if (!uploadExtensions.includes(ext)) {
+        return res.status(400).json({ error: `Extension not allowed: .${ext}` });
+      }
+    }
+
+    // Decode base64 (strip data URL prefix if present)
+    const b64 = file.data.replace(/^data:[^;]+;base64,/, '');
+    const buf = Buffer.from(b64, 'base64');
+
+    // Size check
+    if (uploadMaxSize && buf.length > uploadMaxSize) {
+      return res.status(400).json({ error: `File too large: ${name} (${buf.length} bytes, max ${uploadMaxSize})` });
+    }
+
+    // Jail check
+    let writePath = path.resolve(realDest, name);
+    if (!writePath.startsWith(realDest + path.sep) && writePath !== realDest) {
+      return res.status(403).json({ error: 'Path traversal denied' });
+    }
+
+    // Collision handling: append timestamp if file exists
+    if (fs.existsSync(writePath)) {
+      const ext = path.extname(name);
+      const base = path.basename(name, ext);
+      name = `${base}-${Date.now()}${ext}`;
+      writePath = path.resolve(realDest, name);
+    }
+
+    fs.writeFileSync(writePath, buf);
+    saved.push(writePath);
+  }
+
+  res.json({ paths: saved });
+});
+
 // --- Browser posts response back here ---
 app.post('/response', (req: Request, res: Response) => {
   if (pendingResolve) {
     pendingResolve(req.body);
   }
   filePickerRoot = null;
+  uploadDest = null;
+  uploadMaxSize = null;
+  uploadExtensions = null;
   res.json({ ok: true });
 });
 
