@@ -420,6 +420,85 @@
 
   .toggle-track.on .toggle-thumb { left: 20px; }
 
+  /* rank — drag to reorder */
+  .rank-list { margin-bottom: 8px; }
+
+  .rank-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    background: #111;
+    border: 1px solid #2a2a2a;
+    border-radius: 6px;
+    cursor: grab;
+    user-select: none;
+    transition: border-color 0.1s, background 0.1s;
+  }
+
+  .rank-row:active { cursor: grabbing; }
+  .rank-row.dragging { opacity: 0.4; }
+  .rank-row.drag-over { border-color: #7c6af7; background: #1e1a2e; }
+
+  .rank-badge {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #2a2a2a;
+    color: #999;
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .rank-handle {
+    color: #444;
+    font-size: 16px;
+    flex-shrink: 0;
+    cursor: grab;
+  }
+
+  .rank-label {
+    flex: 1;
+    font-size: 14px;
+    color: #ccc;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .rank-row img {
+    width: 40px;
+    height: 40px;
+    object-fit: cover;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+
+  .rank-arrows {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+
+  .rank-arrows button {
+    padding: 2px 6px;
+    font-size: 11px;
+    line-height: 1;
+    border-radius: 4px;
+  }
+
+  .rank-arrows button:disabled {
+    opacity: 0.2;
+    cursor: default;
+  }
+
   /* compare — side-by-side cards */
   .compare-grid {
     display: grid;
@@ -583,6 +662,82 @@ function render(payload) {
         if (value) respond({ text: value });
       }
     });
+    return;
+  }
+
+  if (payload.type === 'rank') {
+    const items = payload.options.map(o => ({ ...o }));
+
+    function renderRankList() {
+      const container = document.getElementById('rank-list');
+      container.innerHTML = '';
+      items.forEach((item, i) => {
+        const row = document.createElement('div');
+        row.className = 'rank-row';
+        row.draggable = true;
+        row.dataset.i = String(i);
+        const imgTag = item.image ? `<img src="/static${item.image}" alt="${esc(item.label)}">` : '';
+        row.innerHTML = `<span class="rank-handle">⠿</span><span class="rank-badge">${i + 1}</span>${imgTag}<span class="rank-label">${esc(item.label)}</span><span class="rank-arrows"><button data-dir="up" ${i === 0 ? 'disabled' : ''}>▲</button><button data-dir="down" ${i === items.length - 1 ? 'disabled' : ''}>▼</button></span>`;
+
+        // Arrow buttons
+        row.querySelectorAll('.rank-arrows button').forEach(btn => {
+          btn.onclick = (e) => {
+            e.stopPropagation();
+            const dir = btn.dataset.dir;
+            if (dir === 'up' && i > 0) {
+              [items[i], items[i - 1]] = [items[i - 1], items[i]];
+              renderRankList();
+            } else if (dir === 'down' && i < items.length - 1) {
+              [items[i], items[i + 1]] = [items[i + 1], items[i]];
+              renderRankList();
+            }
+          };
+        });
+
+        // Drag events
+        row.addEventListener('dragstart', (e) => {
+          row.classList.add('dragging');
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', String(i));
+        });
+        row.addEventListener('dragend', () => row.classList.remove('dragging'));
+        row.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          row.classList.add('drag-over');
+        });
+        row.addEventListener('dragleave', () => row.classList.remove('drag-over'));
+        row.addEventListener('drop', (e) => {
+          e.preventDefault();
+          row.classList.remove('drag-over');
+          const fromIdx = parseInt(e.dataTransfer.getData('text/plain'));
+          const toIdx = i;
+          if (fromIdx !== toIdx) {
+            const [moved] = items.splice(fromIdx, 1);
+            items.splice(toIdx, 0, moved);
+            renderRankList();
+          }
+        });
+
+        container.appendChild(row);
+      });
+    }
+
+    root.innerHTML = `
+      <div class="card">
+        ${payload.title ? `<h2>${esc(payload.title)}</h2>` : ''}
+        ${payload.body ? `<div class="md">${renderBody(payload.body)}</div>` : ''}
+        <div class="rank-list" id="rank-list"></div>
+        <div class="submit-row">
+          <button class="primary" id="btn-submit">Done</button>
+        </div>
+      </div>`;
+
+    renderRankList();
+
+    document.getElementById('btn-submit').onclick = () => {
+      respond({ ranked: items.map(it => it.label) });
+    };
     return;
   }
 

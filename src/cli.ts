@@ -104,6 +104,12 @@ function formatResponse(json: ServerResponse): { text: string; code: number } {
     });
     return { text: lines.join('\n'), code: 0 };
   }
+  if ('ranked' in json) {
+    return {
+      text: json.ranked.map((item, i) => `${i + 1}. ${item}`).join('\n'),
+      code: 0,
+    };
+  }
   if ('results' in json) {
     return {
       text: json.results.map(r => `- ${r.label}: ${r.action || 'skipped'}`).join('\n'),

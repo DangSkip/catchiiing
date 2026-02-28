@@ -9,7 +9,8 @@ export type PromptType =
   | 'review'
   | 'review_each'
   | 'form'
-  | 'compare';
+  | 'compare'
+  | 'rank';
 
 // --- Option items ---
 
@@ -97,6 +98,13 @@ export interface ComparePayload {
   sections: CompareSection[];
 }
 
+export interface RankPayload {
+  type: 'rank';
+  title?: string;
+  body?: string;
+  options: OptionItem[];
+}
+
 export type Payload =
   | DisplayPayload
   | ConfirmPayload
@@ -106,7 +114,8 @@ export type Payload =
   | ReviewPayload
   | ReviewEachPayload
   | FormPayload
-  | ComparePayload;
+  | ComparePayload
+  | RankPayload;
 
 // --- Response interfaces ---
 
@@ -147,6 +156,10 @@ export interface FormResponse {
   values: Record<string, string | boolean>;
 }
 
+export interface RankResponse {
+  ranked: string[];
+}
+
 export interface ErrorResponse {
   error: string;
 }
@@ -160,6 +173,7 @@ export type ServerResponse =
   | ReviewResponse
   | ReviewEachResponse
   | FormResponse
+  | RankResponse
   | ErrorResponse;
 
 // --- parse-md internals ---
