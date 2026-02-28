@@ -12,7 +12,8 @@ export type PromptType =
   | 'compare'
   | 'rank'
   | 'range'
-  | 'rating';
+  | 'rating'
+  | 'file';
 
 // --- Option items ---
 
@@ -125,6 +126,26 @@ export interface RatingPayload {
   style?: 'stars' | 'thumbs';
 }
 
+export interface FileItem {
+  name: string;
+  type: 'file' | 'directory';
+  size: number;
+  extension?: string;
+}
+
+export interface FilePickerPayload {
+  type: 'file';
+  title?: string;
+  body?: string;
+  root?: string;
+  extensions?: string[];
+  multi?: boolean;
+}
+
+export interface FilePickerResponse {
+  chosen: string | string[];
+}
+
 export type Payload =
   | DisplayPayload
   | ConfirmPayload
@@ -137,7 +158,8 @@ export type Payload =
   | ComparePayload
   | RankPayload
   | RangePayload
-  | RatingPayload;
+  | RatingPayload
+  | FilePickerPayload;
 
 // --- Response interfaces ---
 
@@ -206,6 +228,7 @@ export type ServerResponse =
   | RankResponse
   | RangeResponse
   | RatingResponse
+  | FilePickerResponse
   | ErrorResponse;
 
 // --- parse-md internals ---

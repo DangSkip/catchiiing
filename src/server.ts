@@ -4,7 +4,7 @@ import express, { Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
-import { OptionItem, ServerResponse } from './types';
+import { FileItem, OptionItem, ServerResponse } from './types';
 
 const app = express();
 app.use(express.json());
@@ -22,6 +22,7 @@ let serverPort: number | null = null;
 let frontApp: string | null = null;
 let openBrowserDone: Promise<void> | null = null;
 let storedOptions: OptionItem[] = [];
+let filePickerRoot: string | null = null;
 const PAGE_SIZE = 48;
 
 function captureFrontApp(): Promise<string | null> {
@@ -167,6 +168,11 @@ app.post('/ui', async (req: Request, res: Response) => {
     return res.json({ ok: true });
   }
 
+  // File picker: store root server-side for jail enforcement
+  if (payload.type === 'file') {
+    filePickerRoot = path.resolve(payload.root || process.cwd());
+  }
+
   // For filterable payloads: store full list server-side, send first page only
   if (payload.filter && Array.isArray(payload.options)) {
     storedOptions = payload.options;
@@ -214,11 +220,74 @@ app.get('/ui/page', (req: Request, res: Response) => {
   res.json({ items: filtered.slice(offset, offset + limit), total: filtered.length });
 });
 
+// --- File picker directory listing (jailed to root) ---
+app.get('/api/ls', (req: Request, res: Response) => {
+  if (!filePickerRoot) return res.status(400).json({ error: 'No active file picker' });
+
+  const subpath = String(req.query.path || '');
+  const resolvedRoot = path.resolve(filePickerRoot);
+  const target = path.resolve(resolvedRoot, subpath);
+
+  // Jail check: resolved path must be within root
+  if (!target.startsWith(resolvedRoot + path.sep) && target !== resolvedRoot) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  // Symlink check: follow symlinks and re-verify jail
+  let realTarget: string;
+  try {
+    realTarget = fs.realpathSync(target);
+  } catch {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  const realRoot = fs.realpathSync(resolvedRoot);
+  if (!realTarget.startsWith(realRoot + path.sep) && realTarget !== realRoot) {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+
+  // Read directory
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(realTarget, { withFileTypes: true });
+  } catch {
+    return res.status(403).json({ error: 'Cannot read directory' });
+  }
+
+  // Filter hidden files, build items
+  const items: FileItem[] = entries
+    .filter(e => !e.name.startsWith('.'))
+    .map(e => {
+      const fullPath = path.join(realTarget, e.name);
+      const isDir = e.isDirectory();
+      let size = 0;
+      try { size = isDir ? 0 : fs.statSync(fullPath).size; } catch {}
+      return {
+        name: e.name,
+        type: isDir ? 'directory' as const : 'file' as const,
+        size,
+        extension: isDir ? undefined : path.extname(e.name).slice(1).toLowerCase() || undefined,
+      };
+    })
+    .sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+
+  const isAtRoot = realTarget === realRoot;
+  res.json({
+    path: target,
+    root: resolvedRoot,
+    atRoot: isAtRoot,
+    items,
+  });
+});
+
 // --- Browser posts response back here ---
 app.post('/response', (req: Request, res: Response) => {
   if (pendingResolve) {
     pendingResolve(req.body);
   }
+  filePickerRoot = null;
   res.json({ ok: true });
 });
 

@@ -655,6 +655,121 @@
   .compare-card-body .md { margin-bottom: 0; }
   .compare-card-body .md p:last-child { margin-bottom: 0; }
 
+  /* file picker */
+  .file-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    min-height: 24px;
+  }
+
+  .file-breadcrumb span {
+    color: #666;
+    user-select: none;
+  }
+
+  .file-breadcrumb button {
+    background: none;
+    border: none;
+    color: #7c6af7;
+    cursor: pointer;
+    font-size: 13px;
+    padding: 2px 4px;
+    border-radius: 3px;
+  }
+
+  .file-breadcrumb button:hover {
+    background: #232323;
+    text-decoration: underline;
+  }
+
+  .file-breadcrumb .crumb-current {
+    color: #e8e8e8;
+    font-weight: 500;
+  }
+
+  .file-list {
+    margin-bottom: 8px;
+  }
+
+  .file-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 4px;
+    border-bottom: 1px solid #1f1f1f;
+    font-size: 14px;
+    color: #ccc;
+    user-select: none;
+  }
+
+  .file-row:last-child { border-bottom: none; }
+
+  .file-row.dir {
+    cursor: pointer;
+  }
+
+  .file-row.dir:hover {
+    color: #e8e8e8;
+    background: #1f1f1f;
+    border-radius: 4px;
+  }
+
+  .file-row.selectable {
+    cursor: pointer;
+  }
+
+  .file-row.selectable:hover {
+    color: #e8e8e8;
+    background: #1f1f1f;
+    border-radius: 4px;
+  }
+
+  .file-row.dimmed {
+    opacity: 0.35;
+    cursor: default;
+  }
+
+  .file-row .file-icon {
+    font-size: 16px;
+    width: 20px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  .file-row .file-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .file-row .file-size {
+    color: #555;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+
+  .file-row input {
+    accent-color: #7c6af7;
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+
+  .file-empty {
+    color: #555;
+    font-size: 13px;
+    text-align: center;
+    padding: 24px 0;
+  }
+
   .sentinel { height: 1px; }
 
   .loading-more {
@@ -976,6 +1091,11 @@ function render(payload) {
     return;
   }
 
+  if (payload.type === 'file') {
+    renderFilePicker(payload);
+    return;
+  }
+
   if (payload.type === 'compare') {
     const n = payload.sections.length;
     const gridClass = n === 2 ? 'cols-2' : n === 3 ? 'cols-3' : 'cols-many';
@@ -1205,6 +1325,172 @@ function render(payload) {
       }
     }
   }
+}
+
+function renderFilePicker(payload) {
+  const multi = !!payload.multi;
+  const extensions = payload.extensions || null; // e.g. ['ts','tsx']
+  const inputType = multi ? 'checkbox' : 'radio';
+  const fileSelected = new Set();
+  let currentPath = '';
+  let currentRoot = '';
+
+  root.innerHTML = `
+    <div class="card">
+      ${payload.title ? `<h2>${esc(payload.title)}</h2>` : ''}
+      ${payload.body ? `<div class="md">${renderBody(payload.body)}</div>` : ''}
+      <div class="file-breadcrumb" id="file-breadcrumb"></div>
+      <div class="file-list" id="file-list"></div>
+      <div class="submit-row">
+        <span class="tally" id="file-tally"></span>
+        <button class="primary" id="btn-submit">Select</button>
+      </div>
+    </div>`;
+
+  function updateTally() {
+    const tally = document.getElementById('file-tally');
+    const n = fileSelected.size;
+    tally.textContent = n > 0 ? `${n} selected` : '';
+  }
+
+  function formatSize(bytes) {
+    if (bytes === 0) return '';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  function renderBreadcrumb(dirPath, rootPath) {
+    const bc = document.getElementById('file-breadcrumb');
+    bc.innerHTML = '';
+
+    // Compute relative path from root
+    let rel = dirPath;
+    if (dirPath.startsWith(rootPath)) {
+      rel = dirPath.slice(rootPath.length);
+      if (rel.startsWith('/')) rel = rel.slice(1);
+    }
+
+    const parts = rel ? rel.split('/') : [];
+
+    // Root crumb
+    const rootName = rootPath.split('/').pop() || rootPath;
+    if (parts.length > 0) {
+      const btn = document.createElement('button');
+      btn.textContent = rootName;
+      btn.onclick = () => loadDir('');
+      bc.appendChild(btn);
+    } else {
+      const span = document.createElement('span');
+      span.className = 'crumb-current';
+      span.textContent = rootName;
+      bc.appendChild(span);
+    }
+
+    parts.forEach((part, i) => {
+      const sep = document.createElement('span');
+      sep.textContent = ' / ';
+      bc.appendChild(sep);
+
+      if (i < parts.length - 1) {
+        const btn = document.createElement('button');
+        btn.textContent = part;
+        btn.onclick = () => loadDir(parts.slice(0, i + 1).join('/'));
+        bc.appendChild(btn);
+      } else {
+        const span = document.createElement('span');
+        span.className = 'crumb-current';
+        span.textContent = part;
+        bc.appendChild(span);
+      }
+    });
+  }
+
+  function renderItems(data) {
+    const container = document.getElementById('file-list');
+    container.innerHTML = '';
+
+    if (data.items.length === 0) {
+      container.innerHTML = '<div class="file-empty">Empty directory</div>';
+      return;
+    }
+
+    data.items.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'file-row';
+
+      if (item.type === 'directory') {
+        row.classList.add('dir');
+        row.innerHTML = `<span class="file-icon">📁</span><span class="file-name">${esc(item.name)}</span>`;
+        row.onclick = () => {
+          const rel = currentPath ? currentPath + '/' + item.name : item.name;
+          loadDir(rel);
+        };
+      } else {
+        const matchesExt = !extensions || (item.extension && extensions.includes(item.extension));
+        const absPath = data.path + '/' + item.name;
+
+        if (matchesExt) {
+          row.classList.add('selectable');
+          const checked = fileSelected.has(absPath) ? 'checked' : '';
+          row.innerHTML = `<input type="${inputType}" name="file-pick" ${checked} data-path="${esc(absPath)}"><span class="file-icon">📄</span><span class="file-name">${esc(item.name)}</span><span class="file-size">${formatSize(item.size)}</span>`;
+
+          const cb = row.querySelector('input');
+          row.onclick = (e) => {
+            if (e.target === cb) return;
+            cb.checked = !cb.checked;
+            cb.dispatchEvent(new Event('change'));
+          };
+          cb.addEventListener('change', () => {
+            if (!multi) {
+              fileSelected.clear();
+              container.querySelectorAll('input').forEach(inp => {
+                if (inp !== cb) inp.checked = false;
+              });
+            }
+            if (cb.checked) fileSelected.add(absPath);
+            else fileSelected.delete(absPath);
+            updateTally();
+          });
+        } else {
+          row.classList.add('dimmed');
+          row.innerHTML = `<span style="width:15px"></span><span class="file-icon">📄</span><span class="file-name">${esc(item.name)}</span><span class="file-size">${formatSize(item.size)}</span>`;
+        }
+      }
+
+      container.appendChild(row);
+    });
+  }
+
+  async function loadDir(subpath) {
+    currentPath = subpath;
+    const container = document.getElementById('file-list');
+    container.innerHTML = '<div class="file-empty">Loading…</div>';
+
+    try {
+      const res = await fetch('/api/ls?path=' + encodeURIComponent(subpath));
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        container.innerHTML = `<div class="file-empty">${esc(err.error || 'Error loading directory')}</div>`;
+        return;
+      }
+      const data = await res.json();
+      currentRoot = data.root;
+      renderBreadcrumb(data.path, data.root);
+      renderItems(data);
+    } catch (err) {
+      container.innerHTML = '<div class="file-empty">Failed to load directory</div>';
+    }
+  }
+
+  document.getElementById('btn-submit').onclick = () => {
+    if (fileSelected.size === 0) return;
+    const chosen = multi ? [...fileSelected] : [...fileSelected][0];
+    respond({ chosen });
+  };
+
+  // Initial load
+  loadDir('');
 }
 
 function renderFilterable(payload) {

@@ -241,6 +241,17 @@ function parseMd(raw: string): Payload {
     return payload as unknown as Payload;
   }
 
+  // File picker: pass through root, extensions, multi
+  if (type === 'file') {
+    const payload: Record<string, unknown> = { type: 'file' };
+    if (title) payload.title = title;
+    if (body) payload.body = body;
+    if (meta.root) payload.root = meta.root;
+    if (meta.extensions) payload.extensions = meta.extensions;
+    if (meta.multi === true) payload.multi = true;
+    return payload as unknown as Payload;
+  }
+
   // Compare type: split body on ## headings into sections
   if (type === 'compare') {
     const parsed = parseCompareSections(mdBody);
