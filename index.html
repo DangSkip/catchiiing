@@ -420,6 +420,50 @@
 
   .toggle-track.on .toggle-thumb { left: 20px; }
 
+  /* rating — stars / thumbs */
+  .stars-row {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  .star {
+    font-size: 36px;
+    cursor: pointer;
+    transition: transform 0.1s;
+    color: #333;
+    line-height: 1;
+  }
+
+  .star:hover { transform: scale(1.15); }
+  .star.lit { color: #f5a623; }
+
+  .thumbs-row {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin-bottom: 20px;
+  }
+
+  .thumb-btn {
+    width: 80px;
+    height: 80px;
+    border-radius: 16px;
+    border: 2px solid #2a2a2a;
+    background: #111;
+    font-size: 36px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.15s, background 0.15s, transform 0.1s;
+  }
+
+  .thumb-btn:hover { border-color: #444; transform: scale(1.05); }
+  .thumb-btn.selected-up { border-color: #4caf50; background: #1a2e1a; }
+  .thumb-btn.selected-down { border-color: #e53935; background: #2e1a1a; }
+
   /* range — slider */
   .range-wrapper {
     margin-bottom: 20px;
@@ -721,6 +765,65 @@ function render(payload) {
         if (value) respond({ text: value });
       }
     });
+    return;
+  }
+
+  if (payload.type === 'rating') {
+    const style = payload.style || 'stars';
+
+    if (style === 'thumbs') {
+      root.innerHTML = `
+        <div class="card">
+          ${payload.title ? `<h2>${esc(payload.title)}</h2>` : ''}
+          ${payload.body ? `<div class="md">${renderBody(payload.body)}</div>` : ''}
+          <div class="thumbs-row">
+            <button class="thumb-btn" id="thumb-up">👍</button>
+            <button class="thumb-btn" id="thumb-down">👎</button>
+          </div>
+        </div>`;
+      document.getElementById('thumb-up').onclick = () => {
+        document.getElementById('thumb-up').classList.add('selected-up');
+        setTimeout(() => respond({ rating: 'up' }), 150);
+      };
+      document.getElementById('thumb-down').onclick = () => {
+        document.getElementById('thumb-down').classList.add('selected-down');
+        setTimeout(() => respond({ rating: 'down' }), 150);
+      };
+    } else {
+      const max = payload.max || 5;
+      let current = 0;
+      const stars = Array.from({ length: max }, (_, i) => `<span class="star" data-v="${i + 1}">★</span>`).join('');
+      root.innerHTML = `
+        <div class="card">
+          ${payload.title ? `<h2>${esc(payload.title)}</h2>` : ''}
+          ${payload.body ? `<div class="md">${renderBody(payload.body)}</div>` : ''}
+          <div class="stars-row" id="stars-row">${stars}</div>
+          <div class="actions" style="justify-content:center">
+            <button class="primary" id="btn-submit">Submit</button>
+          </div>
+        </div>`;
+
+      function updateStars() {
+        root.querySelectorAll('.star').forEach(s => {
+          s.classList.toggle('lit', parseInt(s.dataset.v) <= current);
+        });
+      }
+
+      root.querySelectorAll('.star').forEach(s => {
+        s.onclick = () => { current = parseInt(s.dataset.v); updateStars(); };
+        s.onmouseenter = () => {
+          const hv = parseInt(s.dataset.v);
+          root.querySelectorAll('.star').forEach(st => {
+            st.classList.toggle('lit', parseInt(st.dataset.v) <= hv);
+          });
+        };
+      });
+      document.getElementById('stars-row').onmouseleave = () => updateStars();
+
+      document.getElementById('btn-submit').onclick = () => {
+        if (current > 0) respond({ rating: current });
+      };
+    }
     return;
   }
 

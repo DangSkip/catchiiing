@@ -11,7 +11,8 @@ export type PromptType =
   | 'form'
   | 'compare'
   | 'rank'
-  | 'range';
+  | 'range'
+  | 'rating';
 
 // --- Option items ---
 
@@ -116,6 +117,14 @@ export interface RangePayload {
   value?: number;
 }
 
+export interface RatingPayload {
+  type: 'rating';
+  title?: string;
+  body?: string;
+  max?: number;
+  style?: 'stars' | 'thumbs';
+}
+
 export type Payload =
   | DisplayPayload
   | ConfirmPayload
@@ -127,7 +136,8 @@ export type Payload =
   | FormPayload
   | ComparePayload
   | RankPayload
-  | RangePayload;
+  | RangePayload
+  | RatingPayload;
 
 // --- Response interfaces ---
 
@@ -176,6 +186,10 @@ export interface RangeResponse {
   value: number;
 }
 
+export interface RatingResponse {
+  rating: number | string;
+}
+
 export interface ErrorResponse {
   error: string;
 }
@@ -191,6 +205,7 @@ export type ServerResponse =
   | FormResponse
   | RankResponse
   | RangeResponse
+  | RatingResponse
   | ErrorResponse;
 
 // --- parse-md internals ---

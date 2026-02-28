@@ -219,6 +219,16 @@ function parseMd(raw: string): Payload {
 
   const type = inferType(meta, { options, body, hasImages });
 
+  // Rating type: pass through max and style
+  if (type === 'rating') {
+    const payload: Record<string, unknown> = { type: 'rating' };
+    if (title) payload.title = title;
+    if (body) payload.body = body;
+    if (meta.max !== undefined) payload.max = Number(meta.max);
+    if (meta.style) payload.style = meta.style;
+    return payload as unknown as Payload;
+  }
+
   // Range type: pass through numeric frontmatter keys
   if (type === 'range') {
     const payload: Record<string, unknown> = { type: 'range' };
