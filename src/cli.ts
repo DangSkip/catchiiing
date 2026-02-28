@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * cli.js — Markdown CLI for promptui
+ * cli.ts — Markdown CLI for promptui
  *
  * Usage:
  *   promptui                  # no args → start server (backward compat)
@@ -9,13 +9,12 @@
  *   cat workflow.md | promptui -   # read from stdin
  */
 
-'use strict';
-
-const fs = require('fs');
-const http = require('http');
-const path = require('path');
-const { spawn } = require('child_process');
-const parseMd = require('./parse-md');
+import fs from 'fs';
+import http from 'http';
+import path from 'path';
+import { spawn } from 'child_process';
+import parseMd from './parse-md';
+import { Payload, ServerResponse } from './types';
 
 const PORT_FILE = '/tmp/promptui.port';
 const POLL_INTERVAL_MS = 200;
@@ -23,12 +22,12 @@ const POLL_TIMEOUT_MS = 5000;
 
 // --- Helpers ---
 
-function readPort() {
+function readPort(): number | null {
   try { return parseInt(fs.readFileSync(PORT_FILE, 'utf8').trim(), 10); }
   catch { return null; }
 }
 
-function isServerAlive(port) {
+function isServerAlive(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const req = http.get({ hostname: '127.0.0.1', port, path: '/', timeout: 1000 }, (res) => {
       res.resume();
@@ -39,7 +38,7 @@ function isServerAlive(port) {
   });
 }
 
-function startServer() {
+function startServer(): void {
   const serverPath = path.join(__dirname, 'server.js');
   const child = spawn(process.execPath, [serverPath], {
     detached: true,
@@ -48,7 +47,7 @@ function startServer() {
   child.unref();
 }
 
-async function ensureServer() {
+async function ensureServer(): Promise<number> {
   let port = readPort();
   if (port && await isServerAlive(port)) return port;
 
@@ -58,7 +57,7 @@ async function ensureServer() {
 
   const deadline = Date.now() + POLL_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+    await new Promise<void>(r => setTimeout(r, POLL_INTERVAL_MS));
     port = readPort();
     if (port && await isServerAlive(port)) return port;
   }
@@ -66,7 +65,7 @@ async function ensureServer() {
   throw new Error('Failed to start promptui server within 5s');
 }
 
-function postPayload(port, payload) {
+function postPayload(port: number, payload: Payload): Promise<ServerResponse> {
   return new Promise((resolve, reject) => {
     const data = JSON.stringify(payload);
     const req = http.request({
@@ -77,7 +76,7 @@ function postPayload(port, payload) {
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
     }, (res) => {
       let body = '';
-      res.on('data', chunk => body += chunk);
+      res.on('data', (chunk: Buffer) => body += chunk);
       res.on('end', () => {
         try { resolve(JSON.parse(body)); }
         catch { reject(new Error(`Invalid server response: ${body}`)); }
@@ -92,31 +91,31 @@ function postPayload(port, payload) {
 /**
  * Convert server JSON response → plain text for stdout.
  */
-function formatResponse(json) {
-  if (json.error) return { text: `error: ${json.error}`, code: 1 };
-  if (json.results !== undefined) {
+function formatResponse(json: ServerResponse): { text: string; code: number } {
+  if ('error' in json) return { text: `error: ${json.error}`, code: 1 };
+  if ('results' in json) {
     return {
       text: json.results.map(r => `- ${r.label}: ${r.action || 'skipped'}`).join('\n'),
       code: 0,
     };
   }
-  if (json.chosen !== undefined) {
+  if ('chosen' in json) {
     if (Array.isArray(json.chosen))
       return { text: json.chosen.map(c => `- ${c}`).join('\n'), code: 0 };
     return { text: String(json.chosen), code: 0 };
   }
-  if (json.confirmed !== undefined) return { text: json.confirmed ? 'yes' : 'no', code: 0 };
-  if (json.action !== undefined) return { text: String(json.action), code: 0 };
-  if (json.text !== undefined) return { text: String(json.text), code: 0 };
-  if (json.ok) return { text: 'ok', code: 0 };
+  if ('confirmed' in json) return { text: json.confirmed ? 'yes' : 'no', code: 0 };
+  if ('action' in json) return { text: String(json.action), code: 0 };
+  if ('text' in json) return { text: String(json.text), code: 0 };
+  if ('ok' in json) return { text: 'ok', code: 0 };
   return { text: JSON.stringify(json), code: 0 };
 }
 
-function readStdin() {
+function readStdin(): Promise<string> {
   return new Promise((resolve, reject) => {
     let data = '';
     process.stdin.setEncoding('utf8');
-    process.stdin.on('data', chunk => data += chunk);
+    process.stdin.on('data', (chunk: string) => data += chunk);
     process.stdin.on('end', () => resolve(data));
     process.stdin.on('error', reject);
   });
@@ -124,7 +123,7 @@ function readStdin() {
 
 // --- Main ---
 
-async function main() {
+async function main(): Promise<void> {
   const arg = process.argv[2];
 
   // No args → start server in foreground (backward compat)
@@ -134,7 +133,7 @@ async function main() {
   }
 
   // Read markdown from file or stdin
-  let md;
+  let md: string;
   if (arg === '-') {
     md = await readStdin();
   } else {
@@ -150,11 +149,12 @@ async function main() {
   const payload = parseMd(md);
 
   // Ensure server is running
-  let port;
+  let port: number;
   try {
     port = await ensureServer();
-  } catch (e) {
-    process.stderr.write(`promptui: ${e.message}\n`);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    process.stderr.write(`promptui: ${msg}\n`);
     process.exit(1);
   }
 
@@ -164,8 +164,9 @@ async function main() {
     const { text, code } = formatResponse(response);
     process.stdout.write(text + '\n');
     process.exit(code);
-  } catch (e) {
-    process.stderr.write(`promptui: ${e.message}\n`);
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    process.stderr.write(`promptui: ${msg}\n`);
     process.exit(1);
   }
 }

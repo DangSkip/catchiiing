@@ -3,19 +3,19 @@
   "version": "0.2.0",
   "description": "Browser-based UI prompts for Claude Code — image pickers, confirmations, reviews, checklists",
   "bin": {
-    "promptui": "./cli.js"
+    "promptui": "./dist/cli.js"
   },
-  "main": "server.js",
+  "main": "dist/server.js",
   "files": [
-    "cli.js",
-    "parse-md.js",
-    "server.js",
+    "dist/",
     "index.html",
     "CLAUDE.md",
     "postinstall.js",
     ".claude/skills/promptui/SKILL.md"
   ],
   "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
     "postinstall": "node postinstall.js"
   },
   "dependencies": {
@@ -24,8 +24,18 @@
   "engines": {
     "node": ">=18"
   },
-  "os": ["darwin"],
-  "keywords": ["claude", "claude-code", "ui", "prompt", "sse", "interactive", "cli"],
+  "os": [
+    "darwin"
+  ],
+  "keywords": [
+    "claude",
+    "claude-code",
+    "ui",
+    "prompt",
+    "sse",
+    "interactive",
+    "cli"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -34,5 +44,10 @@
   "homepage": "https://github.com/DangSkip/promptui#readme",
   "bugs": {
     "url": "https://github.com/DangSkip/promptui/issues"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.3.2",
+    "typescript": "^5.9.3"
   }
 }

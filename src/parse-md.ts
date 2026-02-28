@@ -1,21 +1,28 @@
 /**
- * parse-md.js — Markdown → JSON payload converter for promptui
+ * parse-md.ts — Markdown → JSON payload converter for promptui
  *
  * Parses a Markdown string (with optional YAML frontmatter) into a
  * payload object that the promptui server understands.
  */
 
-'use strict';
+import {
+  FrontmatterMeta,
+  FrontmatterResult,
+  OptionItem,
+  ParsedBody,
+  Payload,
+  PromptType,
+} from './types';
 
 /**
  * Parse simple YAML frontmatter between --- fences.
  * Handles strings, booleans, and simple arrays like [a, b, c].
  */
-function parseFrontmatter(raw) {
+function parseFrontmatter(raw: string): FrontmatterResult {
   const match = raw.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!match) return { meta: {}, body: raw };
 
-  const meta = {};
+  const meta: FrontmatterMeta = {};
   for (const line of match[1].split('\n')) {
     const m = line.match(/^(\w[\w-]*)\s*:\s*(.*)/);
     if (!m) continue;
@@ -35,11 +42,11 @@ function parseFrontmatter(raw) {
 /**
  * Parse the Markdown body into title, body text, and options.
  */
-function parseBody(md) {
+function parseBody(md: string): ParsedBody {
   const lines = md.split('\n');
   let title = '';
-  const bodyLines = [];
-  const options = [];
+  const bodyLines: string[] = [];
+  const options: OptionItem[] = [];
   const imgRe = /^!\[([^\]]*)\]\(([^)]+)\)$/;
 
   for (const line of lines) {
@@ -80,28 +87,31 @@ function parseBody(md) {
 /**
  * Infer the prompt type from structure when not explicitly set.
  */
-function inferType(meta, { options, body, hasImages }) {
-  if (meta.type) return meta.type;
+function inferType(
+  meta: FrontmatterMeta,
+  context: { options: OptionItem[]; body: string; hasImages: boolean },
+): PromptType {
+  if (meta.type) return meta.type as PromptType;
   if (meta.multi === true) return 'pick_many';
-  if (meta.actions && options.length > 0) return 'review_each';
+  if (meta.actions && context.options.length > 0) return 'review_each';
   if (meta.actions) return 'review';
   if (meta.placeholder) return 'text';
-  if (options.length > 0) return hasImages ? 'choose' : 'choose';
-  if (body) return 'confirm';
+  if (context.options.length > 0) return 'choose';
+  if (context.body) return 'confirm';
   return 'display';
 }
 
 /**
  * Main entry point: parse a Markdown string into a server payload.
  */
-function parseMd(raw) {
+function parseMd(raw: string): Payload {
   const { meta, body: mdBody } = parseFrontmatter(raw);
   const { title, body, options } = parseBody(mdBody);
   const hasImages = options.some(o => o.image);
 
   const type = inferType(meta, { options, body, hasImages });
 
-  const payload = { type };
+  const payload: Record<string, unknown> = { type };
   if (title) payload.title = title;
   if (body) payload.body = body;
   if (options.length > 0) payload.options = options;
@@ -111,7 +121,7 @@ function parseMd(raw) {
   if (meta.actions) payload.actions = meta.actions;
   if (meta.placeholder) payload.placeholder = meta.placeholder;
 
-  return payload;
+  return payload as unknown as Payload;
 }
 
-module.exports = parseMd;
+export default parseMd;

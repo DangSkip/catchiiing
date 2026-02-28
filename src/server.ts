@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
-const express = require('express');
-const fs = require('fs');
-const path = require('path');
-const { exec } = require('child_process');
+import express, { Request, Response } from 'express';
+import fs from 'fs';
+import path from 'path';
+import { exec } from 'child_process';
+import { OptionItem, ServerResponse } from './types';
 
 const app = express();
 app.use(express.json());
@@ -13,17 +14,17 @@ const CHROME_PROFILE = '/tmp/promptui-chrome';
 const SHUTDOWN_GRACE_MS = 60_000;
 const WIN_W = 780, WIN_H = 580;
 
-let sseRes = null;
-let shutdownTimer = null;
-let pendingResolve = null;
-let sseWaiters = [];
-let serverPort = null;
-let frontApp = null;
-let openBrowserDone = null; // resolves when window is positioned
-let storedOptions = [];    // full option list for paginated/filtered payloads
+let sseRes: Response | null = null;
+let shutdownTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingResolve: ((value: ServerResponse) => void) | null = null;
+let sseWaiters: (() => void)[] = [];
+let serverPort: number | null = null;
+let frontApp: string | null = null;
+let openBrowserDone: Promise<void> | null = null;
+let storedOptions: OptionItem[] = [];
 const PAGE_SIZE = 48;
 
-function captureFrontApp() {
+function captureFrontApp(): Promise<string | null> {
   return new Promise((resolve) => {
     exec(`osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true'`, (err, stdout) => {
       resolve(err ? null : stdout.trim());
@@ -31,15 +32,13 @@ function captureFrontApp() {
   });
 }
 
-async function killStaleChromeWindows() {
-  // Kill any existing promptui Chrome instances so we get a fresh window on the new port
+async function killStaleChromeWindows(): Promise<void> {
   return new Promise((resolve) => {
     exec(`pkill -f 'user-data-dir=${CHROME_PROFILE}'`, () => resolve());
   });
 }
 
-function focusPromptUIWindow() {
-  // Find the Chrome process using our user-data-dir and bring it to front via PID
+function focusPromptUIWindow(): void {
   exec(`pgrep -f 'app=http://localhost.*user-data-dir=${CHROME_PROFILE}'`, (err, stdout) => {
     if (err || !stdout.trim()) return;
     const pid = stdout.trim().split('\n')[0];
@@ -47,9 +46,9 @@ function focusPromptUIWindow() {
   });
 }
 
-async function openBrowser() {
+async function openBrowser(): Promise<void> {
   await killStaleChromeWindows();
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  await new Promise<void>((resolve) => setTimeout(resolve, 500));
 
   frontApp = await captureFrontApp();
   const W = WIN_W, H = WIN_H;
@@ -73,8 +72,6 @@ tell application "Finder" to set sb to bounds of window of desktop
 set cx to (item 3 of sb - ${W}) div 2
 set cy to (item 4 of sb - ${H}) div 2`;
 
-  // Single AppleScript: calc position → launch Chrome with hint → poll and
-  // set bounds the moment the window appears (catches it before user sees it)
   const script = `
 ${centerExpr}
 do shell script "open -na 'Google Chrome' --args --app='${url}' --window-size=${W},${H} --window-position=" & (cx as text) & "," & (cy as text) & " --user-data-dir='${CHROME_PROFILE}' --no-first-run --no-default-browser-check"
@@ -90,14 +87,14 @@ repeat with i from 1 to 150
   end try
 end repeat`;
 
-  openBrowserDone = new Promise((resolve) => {
+  openBrowserDone = new Promise<void>((resolve) => {
     const child = exec('osascript', () => resolve());
-    child.stdin.write(script);
-    child.stdin.end();
+    child.stdin!.write(script);
+    child.stdin!.end();
   });
 }
 
-function waitForSSE(timeoutMs = 15000) {
+function waitForSSE(timeoutMs = 15000): Promise<void> {
   if (sseRes) return Promise.resolve();
   return new Promise((resolve, reject) => {
     const waiter = () => { clearTimeout(timer); resolve(); };
@@ -110,7 +107,7 @@ function waitForSSE(timeoutMs = 15000) {
 }
 
 // --- SSE stream the browser listens to ---
-app.get('/events', (req, res) => {
+app.get('/events', (req: Request, res: Response) => {
   if (shutdownTimer) {
     clearTimeout(shutdownTimer);
     shutdownTimer = null;
@@ -128,11 +125,9 @@ app.get('/events', (req, res) => {
   };
 
   if (openBrowserDone) {
-    // Wait for the positioning AppleScript to finish before revealing
     openBrowserDone.then(sendReady);
     openBrowserDone = null;
   } else {
-    // Reconnect — window already positioned
     sendReady();
   }
 
@@ -151,15 +146,16 @@ app.get('/events', (req, res) => {
 });
 
 // --- Send a UI event, block until user responds ---
-app.post('/ui', async (req, res) => {
+app.post('/ui', async (req: Request, res: Response) => {
   let payload = req.body;
 
   if (!sseRes) {
     openBrowser();
     try {
       await waitForSSE();
-    } catch (e) {
-      return res.status(503).json({ error: e.message });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return res.status(503).json({ error: msg });
     }
   }
 
@@ -167,7 +163,7 @@ app.post('/ui', async (req, res) => {
   focusPromptUIWindow();
 
   if (payload.type === 'display') {
-    sseRes.write(`data: ${JSON.stringify(payload)}\n\n`);
+    sseRes!.write(`data: ${JSON.stringify(payload)}\n\n`);
     return res.json({ ok: true });
   }
 
@@ -182,20 +178,21 @@ app.post('/ui', async (req, res) => {
     };
   }
 
-  const UI_TIMEOUT_MS = 5 * 60_000; // 5 minutes max wait for user interaction
-  let result;
+  const UI_TIMEOUT_MS = 5 * 60_000;
+  let result: ServerResponse;
   try {
-    result = await new Promise((resolve, reject) => {
+    result = await new Promise<ServerResponse>((resolve, reject) => {
       const timer = setTimeout(() => {
         pendingResolve = null;
         reject(new Error('UI timed out waiting for user response'));
       }, UI_TIMEOUT_MS);
       pendingResolve = (value) => { clearTimeout(timer); resolve(value); };
-      sseRes.write(`data: ${JSON.stringify(payload)}\n\n`);
+      sseRes!.write(`data: ${JSON.stringify(payload)}\n\n`);
     });
-  } catch (e) {
+  } catch (e: unknown) {
     pendingResolve = null;
-    return res.status(504).json({ error: e.message });
+    const msg = e instanceof Error ? e.message : String(e);
+    return res.status(504).json({ error: msg });
   }
 
   pendingResolve = null;
@@ -207,10 +204,10 @@ app.post('/ui', async (req, res) => {
 });
 
 // --- Paginated / filtered options ---
-app.get('/ui/page', (req, res) => {
-  const q = (req.query.q || '').toLowerCase().trim();
-  const offset = parseInt(req.query.offset) || 0;
-  const limit = parseInt(req.query.limit) || PAGE_SIZE;
+app.get('/ui/page', (req: Request, res: Response) => {
+  const q = (String(req.query.q || '')).toLowerCase().trim();
+  const offset = parseInt(String(req.query.offset)) || 0;
+  const limit = parseInt(String(req.query.limit)) || PAGE_SIZE;
   const filtered = q
     ? storedOptions.filter(o => o.label.toLowerCase().includes(q))
     : storedOptions;
@@ -218,7 +215,7 @@ app.get('/ui/page', (req, res) => {
 });
 
 // --- Browser posts response back here ---
-app.post('/response', (req, res) => {
+app.post('/response', (req: Request, res: Response) => {
   if (pendingResolve) {
     pendingResolve(req.body);
   }
@@ -226,7 +223,7 @@ app.post('/response', (req, res) => {
 });
 
 // --- Serve local files by absolute path ---
-app.get('/static/*', (req, res) => {
+app.get('/static/*', (req: Request, res: Response) => {
   const filePath = '/' + req.params[0];
   if (!fs.existsSync(filePath)) {
     return res.status(404).send('Not found');
@@ -235,15 +232,15 @@ app.get('/static/*', (req, res) => {
 });
 
 // --- Serve frontend ---
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+app.get('/', (_req: Request, res: Response) => {
+  res.sendFile(path.join(__dirname, '..', 'index.html'));
 });
 
 // --- Start ---
 const server = app.listen(0, '127.0.0.1', async () => {
-  serverPort = server.address().port;
+  const addr = server.address();
+  serverPort = typeof addr === 'object' && addr !== null ? addr.port : 0;
   fs.writeFileSync(PORT_FILE, String(serverPort));
-  // Kill any stale Chrome windows from a previous session pointing at a dead port
   await killStaleChromeWindows();
   console.log(`\nUI Bridge running → http://localhost:${serverPort}\n`);
 });
