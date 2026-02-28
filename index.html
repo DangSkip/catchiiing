@@ -878,10 +878,14 @@ let selected = new Set();
 
 function renderBody(text) {
   if (!text) return '';
+  // Fix local image paths: add /static prefix so the server can serve them
+  function fixImagePaths(html) {
+    return html.replace(/src="(\/[^"]+)"/g, 'src="/static$1"');
+  }
   // Raw HTML passthrough if it starts with a tag
-  if (/^\s*</.test(text)) return text;
+  if (/^\s*</.test(text)) return fixImagePaths(text);
   // Otherwise parse as markdown
-  return marked.parse(text);
+  return fixImagePaths(marked.parse(text));
 }
 
 function render(payload) {
