@@ -6,6 +6,7 @@
  */
 
 import {
+  FormField,
   FrontmatterMeta,
   FrontmatterResult,
   OptionItem,
@@ -102,6 +103,63 @@ function inferType(
 }
 
 /**
+ * Parse a bullet item as a form field.
+ *
+ * Supported syntax:
+ *   - Label (text)              → text input
+ *   - Label (textarea)          → multi-line textarea
+ *   - Label (toggle)            → on/off switch
+ *   - Label: [A, B, C]          → dropdown select
+ *   - Label = default (text)    → text input with default
+ *   - Label (toggle) = true     → toggle defaulting on
+ */
+function parseFormField(content: string): FormField {
+  // Dropdown: "Label: [A, B, C]"
+  const selectMatch = content.match(/^(.+?):\s*\[([^\]]+)\]$/);
+  if (selectMatch) {
+    const label = selectMatch[1].trim();
+    const options = selectMatch[2].split(',').map(s => s.trim()).filter(Boolean);
+    return { label, fieldType: 'select', options };
+  }
+
+  // Type hint with optional default: "Label = default (type)" or "Label (type) = default"
+  // Try "Label (type) = default" first
+  const typeDefaultMatch = content.match(/^(.+?)\s*\((text|textarea|toggle)\)\s*=\s*(.+)$/);
+  if (typeDefaultMatch) {
+    const label = typeDefaultMatch[1].trim();
+    const fieldType = typeDefaultMatch[2] as FormField['fieldType'];
+    const rawDefault = typeDefaultMatch[3].trim();
+    const defaultValue = fieldType === 'toggle'
+      ? rawDefault === 'true'
+      : rawDefault;
+    return { label, fieldType, defaultValue };
+  }
+
+  // Try "Label = default (type)"
+  const defaultTypeMatch = content.match(/^(.+?)\s*=\s*(.+?)\s*\((text|textarea|toggle)\)$/);
+  if (defaultTypeMatch) {
+    const label = defaultTypeMatch[1].trim();
+    const rawDefault = defaultTypeMatch[2].trim();
+    const fieldType = defaultTypeMatch[3] as FormField['fieldType'];
+    const defaultValue = fieldType === 'toggle'
+      ? rawDefault === 'true'
+      : rawDefault;
+    return { label, fieldType, defaultValue };
+  }
+
+  // Type hint only: "Label (type)"
+  const typeMatch = content.match(/^(.+?)\s*\((text|textarea|toggle)\)$/);
+  if (typeMatch) {
+    const label = typeMatch[1].trim();
+    const fieldType = typeMatch[2] as FormField['fieldType'];
+    return { label, fieldType };
+  }
+
+  // Bare label — default to text
+  return { label: content.trim(), fieldType: 'text' };
+}
+
+/**
  * Main entry point: parse a Markdown string into a server payload.
  */
 function parseMd(raw: string): Payload {
@@ -110,6 +168,15 @@ function parseMd(raw: string): Payload {
   const hasImages = options.some(o => o.image);
 
   const type = inferType(meta, { options, body, hasImages });
+
+  // Form type: convert option labels into typed fields
+  if (type === 'form') {
+    const fields = options.map(o => parseFormField(o.label));
+    const payload: Record<string, unknown> = { type: 'form', fields };
+    if (title) payload.title = title;
+    if (body) payload.body = body;
+    return payload as unknown as Payload;
+  }
 
   const payload: Record<string, unknown> = { type };
   if (title) payload.title = title;

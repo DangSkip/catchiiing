@@ -93,6 +93,17 @@ function postPayload(port: number, payload: Payload): Promise<ServerResponse> {
  */
 function formatResponse(json: ServerResponse): { text: string; code: number } {
   if ('error' in json) return { text: `error: ${json.error}`, code: 1 };
+  if ('values' in json) {
+    const lines = Object.entries(json.values).map(([key, val]) => {
+      const str = String(val);
+      if (str.includes('\n')) {
+        const indented = str.split('\n').map((l, i) => i === 0 ? l : `  ${l}`).join('\n');
+        return `${key}: ${indented}`;
+      }
+      return `${key}: ${str}`;
+    });
+    return { text: lines.join('\n'), code: 0 };
+  }
   if ('results' in json) {
     return {
       text: json.results.map(r => `- ${r.label}: ${r.action || 'skipped'}`).join('\n'),

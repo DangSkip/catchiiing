@@ -337,6 +337,89 @@
     color: #fff;
   }
 
+  /* form fields */
+  .form-fields { margin-bottom: 8px; }
+
+  .form-field {
+    margin-bottom: 18px;
+  }
+
+  .form-field:last-child { margin-bottom: 8px; }
+
+  .form-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: #b0b0b0;
+    margin-bottom: 6px;
+  }
+
+  .form-text,
+  .form-textarea,
+  .form-select {
+    width: 100%;
+    background: #111;
+    border: 1px solid #2a2a2a;
+    border-radius: 6px;
+    color: #e8e8e8;
+    font-family: system-ui, 'Inter', sans-serif;
+    font-size: 14px;
+    padding: 9px 14px;
+    outline: none;
+  }
+
+  .form-text:focus,
+  .form-textarea:focus,
+  .form-select:focus { border-color: #7c6af7; }
+
+  .form-textarea {
+    min-height: 72px;
+    resize: vertical;
+    line-height: 1.5;
+  }
+
+  .form-select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M3 5l3 3 3-3z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 32px;
+    cursor: pointer;
+  }
+
+  .form-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .toggle-track {
+    width: 40px;
+    height: 22px;
+    background: #333;
+    border-radius: 11px;
+    position: relative;
+    transition: background 0.15s;
+    flex-shrink: 0;
+  }
+
+  .toggle-track.on { background: #7c6af7; }
+
+  .toggle-thumb {
+    width: 18px;
+    height: 18px;
+    background: #e8e8e8;
+    border-radius: 50%;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    transition: left 0.15s;
+  }
+
+  .toggle-track.on .toggle-thumb { left: 20px; }
+
   .sentinel { height: 1px; }
 
   .loading-more {
@@ -447,6 +530,67 @@ function render(payload) {
         if (value) respond({ text: value });
       }
     });
+    return;
+  }
+
+  if (payload.type === 'form') {
+    const fieldsHtml = payload.fields.map((f, i) => {
+      const id = `form-f-${i}`;
+      if (f.fieldType === 'select') {
+        const opts = (f.options || []).map(o =>
+          `<option value="${esc(o)}">${esc(o)}</option>`
+        ).join('');
+        return `<div class="form-field"><label class="form-label" for="${id}">${esc(f.label)}</label><select class="form-select" id="${id}" data-label="${esc(f.label)}">${opts}</select></div>`;
+      }
+      if (f.fieldType === 'textarea') {
+        return `<div class="form-field"><label class="form-label" for="${id}">${esc(f.label)}</label><textarea class="form-textarea" id="${id}" data-label="${esc(f.label)}">${esc(f.defaultValue != null ? String(f.defaultValue) : '')}</textarea></div>`;
+      }
+      if (f.fieldType === 'toggle') {
+        const on = f.defaultValue === true;
+        return `<div class="form-field"><label class="form-label">${esc(f.label)}</label><div class="form-toggle" id="${id}" data-label="${esc(f.label)}" data-value="${on}"><div class="toggle-track${on ? ' on' : ''}"><div class="toggle-thumb"></div></div><span class="toggle-text">${on ? 'On' : 'Off'}</span></div></div>`;
+      }
+      // text (default)
+      return `<div class="form-field"><label class="form-label" for="${id}">${esc(f.label)}</label><input class="form-text" type="text" id="${id}" data-label="${esc(f.label)}" value="${esc(f.defaultValue != null ? String(f.defaultValue) : '')}"></div>`;
+    }).join('');
+
+    root.innerHTML = `
+      <div class="card">
+        ${payload.title ? `<h2>${esc(payload.title)}</h2>` : ''}
+        ${payload.body ? `<div class="md">${renderBody(payload.body)}</div>` : ''}
+        <div class="form-fields">${fieldsHtml}</div>
+        <div class="submit-row">
+          <button class="primary" id="btn-submit">Submit</button>
+        </div>
+      </div>`;
+
+    // Wire up toggle clicks
+    root.querySelectorAll('.form-toggle').forEach(tog => {
+      tog.onclick = () => {
+        const on = tog.dataset.value !== 'true';
+        tog.dataset.value = String(on);
+        tog.querySelector('.toggle-track').className = 'toggle-track' + (on ? ' on' : '');
+        tog.querySelector('.toggle-text').textContent = on ? 'On' : 'Off';
+      };
+    });
+
+    // Submit
+    document.getElementById('btn-submit').onclick = () => {
+      const values = {};
+      payload.fields.forEach((f, i) => {
+        const id = `form-f-${i}`;
+        const el = document.getElementById(id);
+        if (f.fieldType === 'toggle') {
+          values[f.label] = el.dataset.value === 'true';
+        } else {
+          values[f.label] = el.value;
+        }
+      });
+      respond({ values });
+    };
+
+    // Focus first input
+    const first = root.querySelector('.form-text, .form-textarea, .form-select');
+    if (first) first.focus();
     return;
   }
 

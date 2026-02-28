@@ -7,7 +7,8 @@ export type PromptType =
   | 'pick_many'
   | 'text'
   | 'review'
-  | 'review_each';
+  | 'review_each'
+  | 'form';
 
 // --- Option items ---
 
@@ -68,6 +69,22 @@ export interface ReviewEachPayload {
   actions: string[];
 }
 
+export type FormFieldType = 'text' | 'textarea' | 'select' | 'toggle';
+
+export interface FormField {
+  label: string;
+  fieldType: FormFieldType;
+  options?: string[];
+  defaultValue?: string | boolean;
+}
+
+export interface FormPayload {
+  type: 'form';
+  title?: string;
+  body?: string;
+  fields: FormField[];
+}
+
 export type Payload =
   | DisplayPayload
   | ConfirmPayload
@@ -75,7 +92,8 @@ export type Payload =
   | PickManyPayload
   | TextPayload
   | ReviewPayload
-  | ReviewEachPayload;
+  | ReviewEachPayload
+  | FormPayload;
 
 // --- Response interfaces ---
 
@@ -112,6 +130,10 @@ export interface ReviewEachResponse {
   results: ReviewEachResult[];
 }
 
+export interface FormResponse {
+  values: Record<string, string | boolean>;
+}
+
 export interface ErrorResponse {
   error: string;
 }
@@ -124,6 +146,7 @@ export type ServerResponse =
   | TextResponse
   | ReviewResponse
   | ReviewEachResponse
+  | FormResponse
   | ErrorResponse;
 
 // --- parse-md internals ---
