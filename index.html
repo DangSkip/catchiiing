@@ -420,6 +420,59 @@
 
   .toggle-track.on .toggle-thumb { left: 20px; }
 
+  /* compare — side-by-side cards */
+  .compare-grid {
+    display: grid;
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .compare-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+  .compare-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .compare-grid.cols-many { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+
+  .compare-card {
+    background: #111;
+    border: 2px solid #2a2a2a;
+    border-radius: 8px;
+    cursor: pointer;
+    overflow: hidden;
+    transition: border-color 0.15s;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .compare-card:hover { border-color: #444; }
+  .compare-card.selected { border-color: #7c6af7; }
+
+  .compare-card-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #ccc;
+    padding: 12px 14px 8px;
+  }
+
+  .compare-card.selected .compare-card-label { color: #fff; }
+
+  .compare-card-body {
+    font-size: 13px;
+    color: #999;
+    padding: 0 14px 14px;
+    line-height: 1.6;
+    flex: 1;
+  }
+
+  .compare-card-body img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 4px;
+    margin-bottom: 8px;
+  }
+
+  .compare-card-body .md { margin-bottom: 0; }
+  .compare-card-body .md p:last-child { margin-bottom: 0; }
+
   .sentinel { height: 1px; }
 
   .loading-more {
@@ -530,6 +583,42 @@ function render(payload) {
         if (value) respond({ text: value });
       }
     });
+    return;
+  }
+
+  if (payload.type === 'compare') {
+    const n = payload.sections.length;
+    const gridClass = n === 2 ? 'cols-2' : n === 3 ? 'cols-3' : 'cols-many';
+    let chosen = null;
+
+    const cards = payload.sections.map((s, i) => {
+      const bodyHtml = renderBody(s.content);
+      return `<div class="compare-card" data-i="${i}" data-label="${esc(s.label)}">
+        <div class="compare-card-label">${esc(s.label)}</div>
+        <div class="compare-card-body"><div class="md">${bodyHtml}</div></div>
+      </div>`;
+    }).join('');
+
+    root.innerHTML = `
+      <div class="card">
+        ${payload.title ? `<h2>${esc(payload.title)}</h2>` : ''}
+        <div class="compare-grid ${gridClass}">${cards}</div>
+        <div class="submit-row">
+          <button class="primary" id="btn-submit">Choose</button>
+        </div>
+      </div>`;
+
+    root.querySelectorAll('.compare-card').forEach(card => {
+      card.onclick = () => {
+        root.querySelectorAll('.compare-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        chosen = card.dataset.label;
+      };
+    });
+
+    document.getElementById('btn-submit').onclick = () => {
+      if (chosen) respond({ chosen });
+    };
     return;
   }
 

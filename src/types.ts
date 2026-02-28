@@ -8,7 +8,8 @@ export type PromptType =
   | 'text'
   | 'review'
   | 'review_each'
-  | 'form';
+  | 'form'
+  | 'compare';
 
 // --- Option items ---
 
@@ -85,6 +86,17 @@ export interface FormPayload {
   fields: FormField[];
 }
 
+export interface CompareSection {
+  label: string;
+  content: string;
+}
+
+export interface ComparePayload {
+  type: 'compare';
+  title?: string;
+  sections: CompareSection[];
+}
+
 export type Payload =
   | DisplayPayload
   | ConfirmPayload
@@ -93,7 +105,8 @@ export type Payload =
   | TextPayload
   | ReviewPayload
   | ReviewEachPayload
-  | FormPayload;
+  | FormPayload
+  | ComparePayload;
 
 // --- Response interfaces ---
 

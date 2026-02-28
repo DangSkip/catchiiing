@@ -6,6 +6,7 @@
  */
 
 import {
+  CompareSection,
   FormField,
   FrontmatterMeta,
   FrontmatterResult,
@@ -160,6 +161,55 @@ function parseFormField(content: string): FormField {
 }
 
 /**
+ * Parse a compare-type body: split on ## headings into sections.
+ * Each section has a label (heading text) and content (everything until the next ##).
+ */
+function parseCompareSections(md: string): { title: string; sections: CompareSection[] } {
+  const lines = md.split('\n');
+  let title = '';
+  const sections: CompareSection[] = [];
+  let currentLabel = '';
+  let currentLines: string[] = [];
+
+  function flushSection() {
+    if (currentLabel) {
+      // Trim trailing blank lines
+      while (currentLines.length && !currentLines[currentLines.length - 1].trim()) {
+        currentLines.pop();
+      }
+      sections.push({ label: currentLabel, content: currentLines.join('\n').trim() });
+    }
+    currentLabel = '';
+    currentLines = [];
+  }
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // # Title
+    if (!title && /^#\s+/.test(trimmed)) {
+      title = trimmed.replace(/^#\s+/, '');
+      continue;
+    }
+
+    // ## Section heading
+    if (/^##\s+/.test(trimmed)) {
+      flushSection();
+      currentLabel = trimmed.replace(/^##\s+/, '');
+      continue;
+    }
+
+    // Content within a section
+    if (currentLabel) {
+      currentLines.push(line);
+    }
+  }
+
+  flushSection();
+  return { title, sections };
+}
+
+/**
  * Main entry point: parse a Markdown string into a server payload.
  */
 function parseMd(raw: string): Payload {
@@ -168,6 +218,14 @@ function parseMd(raw: string): Payload {
   const hasImages = options.some(o => o.image);
 
   const type = inferType(meta, { options, body, hasImages });
+
+  // Compare type: split body on ## headings into sections
+  if (type === 'compare') {
+    const parsed = parseCompareSections(mdBody);
+    const payload: Record<string, unknown> = { type: 'compare', sections: parsed.sections };
+    if (parsed.title) payload.title = parsed.title;
+    return payload as unknown as Payload;
+  }
 
   // Form type: convert option labels into typed fields
   if (type === 'form') {
