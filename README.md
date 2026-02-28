@@ -2,6 +2,8 @@
 
 Browser-based UI prompts for Claude Code — image pickers, confirmations, reviews, checklists — without leaving the terminal.
 
+> **macOS only.** promptui uses osascript and Chrome app-mode features that are not available on other platforms.
+
 Install globally and Claude Code handles the rest:
 
 ```bash
