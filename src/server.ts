@@ -31,6 +31,14 @@ let uploadMaxSize: number | null = null;
 let uploadExtensions: string[] | null = null;
 const PAGE_SIZE = 48;
 
+function cleanup(): void {
+  try { fs.unlinkSync(PORT_FILE); } catch (_) {}
+  try { fs.rmSync(CHROME_PROFILE, { recursive: true, force: true }); } catch (_) {}
+}
+
+process.on('SIGINT', () => { cleanup(); process.exit(0); });
+process.on('SIGTERM', () => { cleanup(); process.exit(0); });
+
 function captureFrontApp(): Promise<string | null> {
   return new Promise((resolve) => {
     exec(`osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true'`, (err, stdout) => {
@@ -151,7 +159,7 @@ app.get('/events', (req: Request, res: Response) => {
     }
     shutdownTimer = setTimeout(() => {
       console.log('Browser disconnected — shutting down.');
-      try { fs.unlinkSync(PORT_FILE); } catch (_) {}
+      cleanup();
       process.exit(0);
     }, SHUTDOWN_GRACE_MS);
   });
